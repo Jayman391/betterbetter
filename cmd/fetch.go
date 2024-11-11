@@ -42,19 +42,31 @@ var TeamCMD = &cobra.Command{
 		fmt.Println(args)
 		fmt.Println(cmd.Flag("year").Value)
 		
+		var Data string 
 
 		if len(args) != 0 {
 			params := map[string]string{
-				"code": args[0],
+				"search": args[0],
 			}
-			if cmd.Flag("year").Value.String() != "" {
-				params["season"] = cmd.Flag("year").Value.String()
-			}
-			src.FetchData(cmd.Flag("sport").Value.String(), "team", params)
+	
+			Data = src.FetchData(cmd.Flag("sport").Value.String(), "team", params)
 		} else {
-		params := map[string]string{}
+			params := map[string]string{}
 
-		src.FetchData(cmd.Flag("sport").Value.String(), "team", params)
+			Data = src.FetchData(cmd.Flag("sport").Value.String(), "team", params)
+		}
+
+		if Data != "" {
+			parsed_data := src.ParseData(Data)
+			fmt.Println(parsed_data["response"])
+		} else {
+			fmt.Println("No data found")
+		}
+
+		var statsParams = map[string]string{}
+
+		if cmd.Flag("year").Value.String() != "" {
+			statsParams["season"] = cmd.Flag("year").Value.String()
 		}
 
 	},
@@ -70,15 +82,35 @@ var PlayerCMD = &cobra.Command{
 		fmt.Println(args)
 		fmt.Println(cmd.Flag("year").Value)
 
-		params := map[string]string{
-			"name": args[0],
+		var Data string 
+
+		if len(args) != 0 {
+			params := map[string]string{
+				"search": args[0],
+			}
+		
+			Data = src.FetchData(cmd.Flag("sport").Value.String(), "player", params)
+		} else {
+			params := map[string]string{}
+
+			Data = src.FetchData(cmd.Flag("sport").Value.String(), "player", params)
 		}
 
-		if cmd.Flag("year").Value.String() != "" {
-		 	params["season"] = cmd.Flag("year").Value.String()
-		 }
 
-		src.FetchData(cmd.Flag("sport").Value.String(), "player", params)
+		var parsed_data map[string]interface{}
+
+		if Data != "" {
+			parsed_data = src.ParseData(Data)
+			fmt.Println(parsed_data["response"])
+		} else {
+			fmt.Println("No data found")
+		}
+
+		var statsParams = map[string]string{}
+
+		if cmd.Flag("year").Value.String() != "" {
+			statsParams["season"] = cmd.Flag("year").Value.String()
+		}
 	},
 }
 

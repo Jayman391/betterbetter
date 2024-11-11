@@ -3,10 +3,10 @@ package src
 import (
 	"fmt"
 	"net/http"
-  "io/ioutil"
+  "io"
 )
 
-func FetchData(sport string, requestType string, args map[string]string) {
+func FetchData(sport string, requestType string, args map[string]string) string {
 	var url string = ""
 
 	if sport == "nba"{
@@ -24,6 +24,13 @@ func FetchData(sport string, requestType string, args map[string]string) {
 	if requestType == "player"{
 		url = url + "/players?"
 	}
+	if requestType == "team-stats"{
+		url = url + "/team/statistics?"
+	}
+	if requestType == "player-stats"{
+		url = url + "/player/statistics?"
+	}
+
 	if len(args) == 0 {
 		url = url[0:len(url)-1]
 	} else {
@@ -41,13 +48,12 @@ func FetchData(sport string, requestType string, args map[string]string) {
 
   method := "GET"
 
-  client := &http.Client {
-  }
+  client := &http.Client {}
+
   req, err := http.NewRequest(method, url, nil)
 
   if err != nil {
     fmt.Println(err)
-    return
   }
   req.Header.Add("x-rapidapi-key", "b6b0dbc354837ac6cfcaf07693d41da2")
   req.Header.Add("x-rapidapi-host", "v2.nba.api-sports.io")
@@ -55,16 +61,16 @@ func FetchData(sport string, requestType string, args map[string]string) {
   res, err := client.Do(req)
   if err != nil {
     fmt.Println(err)
-    return
+    
   }
   defer res.Body.Close()
 
-  body, err := ioutil.ReadAll(res.Body)
+  body, err := io.ReadAll(res.Body)
   if err != nil {
     fmt.Println(err)
-    return
   }
-  fmt.Println(string(body))
+  
+	return string(body)
 
 }
 
