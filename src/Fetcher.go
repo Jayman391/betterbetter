@@ -25,11 +25,13 @@ func FetchData(sport string, requestType string, args map[string]string) string 
 		url = url + "/players?"
 	}
 	if requestType == "team-stats"{
-		url = url + "/team/statistics?"
+		url = url + "/players/statistics?"
 	}
 	if requestType == "player-stats"{
-		url = url + "/player/statistics?"
+		url = url + "/players/statistics?"
 	}
+
+	fmt.Println(url)
 
 	if len(args) == 0 {
 		url = url[0:len(url)-1]
@@ -44,8 +46,10 @@ func FetchData(sport string, requestType string, args map[string]string) string 
 			index = index + 1
 		}
 	}
+
 	fmt.Println(url)
 
+	
   method := "GET"
 
   client := &http.Client {}
@@ -60,8 +64,7 @@ func FetchData(sport string, requestType string, args map[string]string) string 
 
   res, err := client.Do(req)
   if err != nil {
-    fmt.Println(err)
-    
+    fmt.Println(err) 
   }
   defer res.Body.Close()
 

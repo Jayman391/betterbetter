@@ -8,16 +8,15 @@ import (
 	"betterbetter/src"
 )
 
-func init() {	
+func init() {
 	var Year string
 	var Sport string
 
-	TeamCMD.Flags().StringVarP(&Sport,"sport", "s", "", "Sport to fetch data for")
-	TeamCMD.Flags().StringVarP(&Year,"year", "y", "", "Year to fetch data for")
-	
-	PlayerCMD.Flags().StringVarP(&Sport,"sport", "s", "", "Sport to fetch data for")
-	PlayerCMD.Flags().StringVarP(&Year,"year", "y", "", "Year to fetch data for")
+	TeamCMD.Flags().StringVarP(&Sport, "sport", "s", "", "Sport to fetch data for")
+	TeamCMD.Flags().StringVarP(&Year, "year", "y", "", "Year to fetch data for")
 
+	PlayerCMD.Flags().StringVarP(&Sport, "sport", "s", "", "Sport to fetch data for")
+	PlayerCMD.Flags().StringVarP(&Year, "year", "y", "", "Year to fetch data for")
 
 	FetchCmd.AddCommand(TeamCMD)
 	FetchCmd.AddCommand(PlayerCMD)
@@ -32,85 +31,173 @@ var FetchCmd = &cobra.Command{
 	},
 }
 
-
 var TeamCMD = &cobra.Command{
 	Use:   "team",
 	Short: "Fetch data for a specific team",
 	Long:  `Fetch data for a specific team`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Fetching data for a specific team")
-		fmt.Println(args)
-		fmt.Println(cmd.Flag("year").Value)
-		
-		var Data string 
 
+		var Data string
+
+		// Fetch team data
+		params := map[string]string{}
 		if len(args) != 0 {
-			params := map[string]string{
-				"search": args[0],
-			}
-	
-			Data = src.FetchData(cmd.Flag("sport").Value.String(), "team", params)
-		} else {
-			params := map[string]string{}
-
-			Data = src.FetchData(cmd.Flag("sport").Value.String(), "team", params)
+			params["search"] = args[0]
 		}
 
-		if Data != "" {
-			parsed_data := src.ParseData(Data)
-			fmt.Println(parsed_data["response"])
-		} else {
+		Data = src.FetchData(cmd.Flag("sport").Value.String(), "team", params)
+
+		if Data == "" {
 			fmt.Println("No data found")
+			return
 		}
 
-		var statsParams = map[string]string{}
-
-		if cmd.Flag("year").Value.String() != "" {
-			statsParams["season"] = cmd.Flag("year").Value.String()
+		// Parse the fetched data
+		parsed_data := src.ParseData(Data)
+		if parsed_data == nil {
+			fmt.Println("Error parsing data")
+			return
 		}
 
+		// Save the team data to a JSON file
+		year := cmd.Flag("year").Value.String()
+		err := src.SaveToFile(parsed_data, fmt.Sprintf("data/%s/%s", year, args[0]), "team_data.json")
+		if err != nil {
+			fmt.Printf("Error saving team data: %v\n", err)
+			return
+		}
+		fmt.Println("Team data saved successfully.")
+
+		// Prepare and fetch team stats
+		statsParams := map[string]string{}
+		if year != "" {
+			statsParams["season"] = year
+		}
+
+		// Extract team ID
+		response, ok := parsed_data["response"].([]interface{})
+		if !ok || len(response) == 0 {
+			fmt.Println("Invalid or missing response data")
+			return
+		}
+		teamData := response[0].(map[string]interface{})
+		idValue, exists := teamData["id"]
+		if !exists {
+			fmt.Println("Team ID key not found in teamData")
+			return
+		}
+		id, ok := idValue.(float64)
+		if !ok {
+			fmt.Printf("Team ID is not a float64, actual type: %T, value: %v\n", idValue, idValue)
+			return
+		}
+
+		statsParams["team"] = fmt.Sprintf("%.0f", id)
+		Stats := src.FetchData(cmd.Flag("sport").Value.String(), "team-stats", statsParams)
+		if Stats == "" {
+			fmt.Println("No stats data found")
+			return
+		}
+
+		// Save the stats data to a JSON file
+		statsParsed := src.ParseData(Stats)
+		if statsParsed == nil {
+			fmt.Println("Error parsing stats data")
+			return
+		}
+		err = src.SaveToFile(statsParsed, fmt.Sprintf("data/%s/%s", year, args[0]), "team_stats.json")
+		if err != nil {
+			fmt.Printf("Error saving team stats: %v\n", err)
+			return
+		}
+		fmt.Println("Team stats saved successfully.")
 	},
-	
 }
+
 
 var PlayerCMD = &cobra.Command{
 	Use:   "player",
 	Short: "Fetch data for a specific player",
 	Long:  `Fetch data for a specific player`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Fetching data for a specific player")
-		fmt.Println(args)
-		fmt.Println(cmd.Flag("year").Value)
+		var Data string
 
-		var Data string 
-
+		// Fetch player data
+		params := map[string]string{}
 		if len(args) != 0 {
-			params := map[string]string{
-				"search": args[0],
-			}
-		
-			Data = src.FetchData(cmd.Flag("sport").Value.String(), "player", params)
-		} else {
-			params := map[string]string{}
-
-			Data = src.FetchData(cmd.Flag("sport").Value.String(), "player", params)
+			params["search"] = args[0]
 		}
 
+		Data = src.FetchData(cmd.Flag("sport").Value.String(), "player", params)
 
-		var parsed_data map[string]interface{}
-
-		if Data != "" {
-			parsed_data = src.ParseData(Data)
-			fmt.Println(parsed_data["response"])
-		} else {
+		if Data == "" {
 			fmt.Println("No data found")
+			return
 		}
 
-		var statsParams = map[string]string{}
-
-		if cmd.Flag("year").Value.String() != "" {
-			statsParams["season"] = cmd.Flag("year").Value.String()
+		// Parse the fetched data
+		parsed_data := src.ParseData(Data)
+		if parsed_data == nil {
+			fmt.Println("Error parsing data")
+			return
 		}
+
+		// Save the player data to a JSON file
+		year := cmd.Flag("year").Value.String()
+		err := src.SaveToFile(parsed_data, fmt.Sprintf("data/%s/%s", year, args[0]), "player_data.json")
+		if err != nil {
+			fmt.Printf("Error saving player data: %v\n", err)
+			return
+		}
+		fmt.Println("Player data saved successfully.")
+
+		// Prepare and fetch player stats
+		statsParams := map[string]string{}
+		if year != "" {
+			statsParams["season"] = year
+		}
+
+		// Extract player ID
+		response, ok := parsed_data["response"].([]interface{})
+		if !ok || len(response) == 0 {
+			fmt.Println("Invalid or missing response data")
+			return
+		}
+		playerData := response[0].(map[string]interface{})
+		idValue, exists := playerData["id"]
+		if !exists {
+			fmt.Println("Player ID key not found in playerData")
+			return
+		}
+		id, ok := idValue.(float64)
+		if !ok {
+			fmt.Printf("Player ID is not a float64, actual type: %T, value: %v\n", idValue, idValue)
+			return
+		}
+
+		statsParams["id"] = fmt.Sprintf("%.0f", id)
+		Stats := src.FetchData(cmd.Flag("sport").Value.String(), "player-stats", statsParams)
+		if Stats == "" {
+			fmt.Println("No stats data found")
+			return
+		}
+
+		// Save the stats data to a JSON file
+		statsParsed := src.ParseData(Stats)
+		if statsParsed == nil {
+			fmt.Println("Error parsing stats data")
+			return
+		}
+		err = src.SaveToFile(statsParsed, fmt.Sprintf("data/%s/%s", year, args[0]), "player_stats.json")
+		if err != nil {
+			fmt.Printf("Error saving player stats: %v\n", err)
+			return
+		}
+		fmt.Println("Player stats saved successfully.")
 	},
 }
+
+
+
 

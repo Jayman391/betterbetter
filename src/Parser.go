@@ -7,7 +7,11 @@ import (
 
 func ParseData(data string) map[string]interface{} {
 	var result map[string]interface{}
-	json.Unmarshal([]byte(data), &result)
-	fmt.Println(result)
+	err := json.Unmarshal([]byte(data), &result)
+	if err != nil {
+			fmt.Println("Error parsing JSON:", err)
+			return nil
+	}
+
 	return result
 }
