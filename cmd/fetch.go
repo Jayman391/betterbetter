@@ -6,6 +6,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"betterbetter/src"
+
+	"os"
 )
 
 func init() {
@@ -62,6 +64,25 @@ var TeamCMD = &cobra.Command{
 
 		// Save the team data to a JSON file
 		year := cmd.Flag("year").Value.String()
+
+		direrr := os.MkdirAll("data", os.ModePerm)
+		if direrr != nil {
+			fmt.Printf("Error creating data directory: %v\n", direrr)
+			return
+		}
+
+		direrr = os.MkdirAll(fmt.Sprintf("data/%s", year), os.ModePerm)
+		if direrr != nil {
+			fmt.Printf("Error creating year directory: %v\n", direrr)
+			return
+		}
+
+		direrr = os.MkdirAll(fmt.Sprintf("data/%s/%s", year, args[0]), os.ModePerm)
+		if direrr != nil {
+			fmt.Printf("Error creating player directory: %v\n", direrr)
+			return
+		}
+		
 		err := src.SaveToFile(parsed_data, fmt.Sprintf("data/%s/%s", year, args[0]), "team_data.json")
 		if err != nil {
 			fmt.Printf("Error saving team data: %v\n", err)
@@ -145,6 +166,25 @@ var PlayerCMD = &cobra.Command{
 
 		// Save the player data to a JSON file
 		year := cmd.Flag("year").Value.String()
+
+		direrr := os.MkdirAll("data", os.ModePerm)
+		if direrr != nil {
+			fmt.Printf("Error creating data directory: %v\n", direrr)
+			return
+		}
+
+		direrr = os.MkdirAll(fmt.Sprintf("data/%s", year), os.ModePerm)
+		if direrr != nil {
+			fmt.Printf("Error creating year directory: %v\n", direrr)
+			return
+		}
+
+		direrr = os.MkdirAll(fmt.Sprintf("data/%s/%s", year, args[0]), os.ModePerm)
+		if direrr != nil {
+			fmt.Printf("Error creating player directory: %v\n", direrr)
+			return
+		}
+
 		err := src.SaveToFile(parsed_data, fmt.Sprintf("data/%s/%s", year, args[0]), "player_data.json")
 		if err != nil {
 			fmt.Printf("Error saving player data: %v\n", err)
