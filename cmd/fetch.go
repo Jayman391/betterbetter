@@ -12,23 +12,31 @@ import (
 	"strings"
 )
 
+type mapFunc[E any] func(E) E
+
+func Map[S ~[]E, E any](s S, f mapFunc[E]) S {
+	result := make(S, len(s))
+	for i := range s {
+			result[i] = f(s[i])
+	}
+	return result
+}
+
+func TrimBracket(s string) string {
+	return strings.Trim(s, "[]")
+}
+
 func init() {
 	var Year string
 	var Sport string
 	var Teams []string
 	var Players []string
 
-	TeamCMD.Flags().StringSliceVarP(&Teams, "teams", "t", []string{}, "teams to fetch data for")
-	TeamCMD.Flags().StringVarP(&Sport, "sport", "s", "", "Sport to fetch data for")
-	TeamCMD.Flags().StringVarP(&Year, "year", "y", "", "Year to fetch data for")
+	FetchCmd.Flags().StringVarP(&Sport, "sport", "s", "", "Sport to fetch data for")
+	FetchCmd.Flags().StringSliceVarP(&Players, "players", "p", []string{}, "players to fetch data for")
+	FetchCmd.Flags().StringSliceVarP(&Teams, "teams", "t", []string{}, "teams to fetch data for")
+	FetchCmd.Flags().StringVarP(&Year, "year", "y", "", "Year to fetch data for")
 
-	PlayerCMD.Flags().StringSliceVarP(&Players, "players", "p", []string{}, "players to fetch data for")
-	PlayerCMD.Flags().StringVarP(&Sport, "sport", "s", "", "Sport to fetch data for")
-	PlayerCMD.Flags().StringVarP(&Year, "year", "y", "", "Year to fetch data for")
-
-
-	FetchCmd.AddCommand(TeamCMD)
-	FetchCmd.AddCommand(PlayerCMD)
 	rootCmd.AddCommand(FetchCmd)
 }
 
@@ -37,30 +45,58 @@ var FetchCmd = &cobra.Command{
 	Short: "Fetch sports data",
 	Long:  `Fetch sports data from the internet`,
 	Run: func(cmd *cobra.Command, args []string) {
-	},
-}
 
-var TeamCMD = &cobra.Command{
-	Use:   "team",
-	Short: "Fetch data for a specific team",
-	Long:  `Fetch data for a specific team`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Fetching data for a specific team")
+		sport := cmd.Flag("sport").Value.String()
+		year := cmd.Flag("year").Value.String()
 
-		var Data string
+		teams := strings.Split(cmd.Flag("teams").Value.String(), ",")
+		teams = Map(teams, TrimBracket)
 
-		// Fetch team data
-		params := map[string]string{}
-	
-			teams := strings.Split(cmd.Flag("teams").Value.String(), ",")
+		fmt.Println(teams)
 
+
+		teampaths := []string{}
+		if teams[0] != "" {
+			for _, team := range teams {
+				teampaths = append(teampaths, fmt.Sprintf("data/%s/%s/%s", sport, year, team))
+			}
+	  }
+
+		players := strings.Split(cmd.Flag("players").Value.String(), ",")
+		players = Map(players, TrimBracket)
+
+		playerpaths := []string{}
+		if players[0] != "" {
+			for _, player := range players {
+				playerpaths = append(playerpaths, fmt.Sprintf("data/%s/%s/%s", sport, year, player))
+			}
+		}
+
+		os.Mkdir(fmt.Sprintf("data/%s", sport), os.ModePerm)
+		os.Mkdir(fmt.Sprintf("data/%s/%s", sport, year), os.ModePerm)
+
+		if len(teampaths) > 0 {
+			for _, path := range teampaths {
+				os.Mkdir(path, os.ModePerm)
+			}
+		}
+
+		if len(playerpaths) > 0 {
+			for _, path := range playerpaths {
+				os.Mkdir(path, os.ModePerm)
+			}
+		}
+
+		if teams[0] != "" {
 			for _, team := range teams {
 
 				team = strings.Trim(team, "[]")
+
+				params := map[string]string{}
 				
 				params["search"] = string(team)
 
-				Data = src.FetchData(cmd.Flag("sport").Value.String(), "team", params)
+				Data := src.FetchData(sport, "team", params)
 
 				if Data == "" {
 					fmt.Println("No data found")
@@ -73,9 +109,6 @@ var TeamCMD = &cobra.Command{
 					fmt.Println("Error parsing data")
 					return
 				}
-
-				// Save the team data to a JSON file
-				year := cmd.Flag("year").Value.String()
 
 				direrr := os.MkdirAll("data", os.ModePerm)
 				if direrr != nil {
@@ -127,7 +160,7 @@ var TeamCMD = &cobra.Command{
 				}
 
 				statsParams["team"] = fmt.Sprintf("%.0f", id)
-				Stats := src.FetchData(cmd.Flag("sport").Value.String(), "team-stats", statsParams)
+				Stats := src.FetchData(sport, "team-stats", statsParams)
 				if Stats == "" {
 					fmt.Println("No stats data found")
 					return
@@ -146,32 +179,20 @@ var TeamCMD = &cobra.Command{
 				}
 				fmt.Println("Team stats saved successfully.")
 			}
-		
-	},
-}
+		}
 
+		if players[0] != "" {
 
-var PlayerCMD = &cobra.Command{
-	Use:   "player",
-	Short: "Fetch data for a specific player",
-	Long:  `Fetch data for a specific player`,
-	Run: func(cmd *cobra.Command, args []string) {
-		var Data string
-
-		// Fetch player data
-		params := map[string]string{}
-
-		fmt.Println(cmd.Flag("players").Value)
-		
-			players := strings.Split(cmd.Flag("players").Value.String(), ",")
 			for _, player := range players {
 
 				player = strings.Trim(player, "[]")
 
+				params := map[string]string{}
+
 				params["search"] = string(player)
 			
 
-				Data = src.FetchData(cmd.Flag("sport").Value.String(), "player", params)
+				Data := src.FetchData(sport, "player", params)
 
 				if Data == "" {
 					fmt.Println("No data found")
@@ -184,9 +205,6 @@ var PlayerCMD = &cobra.Command{
 					fmt.Println("Error parsing data")
 					return
 				}
-
-				// Save the player data to a JSON file
-				year := cmd.Flag("year").Value.String()
 
 				direrr := os.MkdirAll("data", os.ModePerm)
 				if direrr != nil {
@@ -238,7 +256,7 @@ var PlayerCMD = &cobra.Command{
 				}
 
 				statsParams["id"] = fmt.Sprintf("%.0f", id)
-				Stats := src.FetchData(cmd.Flag("sport").Value.String(), "player-stats", statsParams)
+				Stats := src.FetchData(sport, "player-stats", statsParams)
 				if Stats == "" {
 					fmt.Println("No stats data found")
 					return
@@ -258,9 +276,6 @@ var PlayerCMD = &cobra.Command{
 				fmt.Println("Player stats saved successfully.")
 			
 		}
-	},
+	}
+},
 }
-
-
-
-
