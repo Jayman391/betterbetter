@@ -116,19 +116,9 @@ var FetchCmd = &cobra.Command{
 					return
 				}
 
-				direrr = os.MkdirAll(fmt.Sprintf("data/%s", year), os.ModePerm)
-				if direrr != nil {
-					fmt.Printf("Error creating year directory: %v\n", direrr)
-					return
-				}
-
-				direrr = os.MkdirAll(fmt.Sprintf("data/%s/%s", year, string(team)), os.ModePerm)
-				if direrr != nil {
-					fmt.Printf("Error creating player directory: %v\n", direrr)
-					return
-				}
+			
 				
-				err := src.SaveToFile(parsed_data, fmt.Sprintf("data/%s/%s", year, string(team)), "team_data.json")
+				err := src.SaveToFile(parsed_data, fmt.Sprintf("data/%s/%s/%s",sport, year, string(team)), "team_data.json")
 				if err != nil {
 					fmt.Printf("Error saving team data: %v\n", err)
 					return
@@ -172,7 +162,7 @@ var FetchCmd = &cobra.Command{
 					fmt.Println("Error parsing stats data")
 					return
 				}
-				err = src.SaveToFile(statsParsed, fmt.Sprintf("data/%s/%s", year, string(team)), "team_stats.json")
+				err = src.SaveToFile(statsParsed, fmt.Sprintf("data/%s/%s/%s",sport, year, string(team)), "team_stats.json")
 				if err != nil {
 					fmt.Printf("Error saving team stats: %v\n", err)
 					return
@@ -206,25 +196,9 @@ var FetchCmd = &cobra.Command{
 					return
 				}
 
-				direrr := os.MkdirAll("data", os.ModePerm)
-				if direrr != nil {
-					fmt.Printf("Error creating data directory: %v\n", direrr)
-					return
-				}
+							
 
-				direrr = os.MkdirAll(fmt.Sprintf("data/%s", year), os.ModePerm)
-				if direrr != nil {
-					fmt.Printf("Error creating year directory: %v\n", direrr)
-					return
-				}
-
-				direrr = os.MkdirAll(fmt.Sprintf("data/%s/%s", year, string(player)), os.ModePerm)
-				if direrr != nil {
-					fmt.Printf("Error creating player directory: %v\n", direrr)
-					return
-				}
-
-				err := src.SaveToFile(parsed_data, fmt.Sprintf("data/%s/%s", year, string(player)), "player_data.json")
+				err := src.SaveToFile(parsed_data, fmt.Sprintf("data/%s/%s/%s",sport, year, string(player)), "player_data.json")
 				if err != nil {
 					fmt.Printf("Error saving player data: %v\n", err)
 					return
@@ -268,7 +242,7 @@ var FetchCmd = &cobra.Command{
 					fmt.Println("Error parsing stats data")
 					return
 				}
-				err = src.SaveToFile(statsParsed, fmt.Sprintf("data/%s/%s", year, string(player)), "player_stats.json")
+				err = src.SaveToFile(statsParsed, fmt.Sprintf("data/%s/%s/%s",sport, year, string(player)), "player_stats.json")
 				if err != nil {
 					fmt.Printf("Error saving player stats: %v\n", err)
 					return

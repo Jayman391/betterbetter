@@ -1,6 +1,9 @@
 export PATH=$PATH:~/go/bin
 go install
 
+conda env create -f environment.yml
+conda activate myenv
+
 ## Fetching Sports Data
 
 betterbetter fetch player -p tatum,curry -s nba -y 2023 
