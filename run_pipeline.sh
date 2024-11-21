@@ -4,19 +4,48 @@ go install
 conda env create -f environment.yml
 conda activate myenv
 
-## Fetching Sports Data
+##### Fetching
 
-betterbetter fetch player -p tatum,curry -s nba -y 2023 
+## fetch player and team statistics
 
-## Modeling
+betterbetter fetchdata -s nba -t celtics,lakers -y 2023
 
-betterbetter bayes --predict 
+## for each game fetch odds
 
-## Fetching Odds Data
+betterbetter fetchodds -s nba -t celtics,lakers -d date
 
-betterbetter fetch odds -s nba 
+##### Modeling
 
-## Create Report and Risk Analysis
+## read team statistics and create timeseries data
 
-betterbetter profile 
+    ## make variable lags for bayesian autoregressive model and energy model
+
+betterbetter makepredictions 
+
+    # -b flag for bayesian autoregressive model
+    # -e flag for energy model
+
+##### BetSlip Optimization
+
+## MaxiMax optimization
+
+    ## E[bet]
+    ## Arbitrage Opportunity -> P(pred) - P(actual) 
+
+betterbetter optimizebets 
+
+
+##### Backtesting
+
+## backtest the model
+
+betterbetter backtest
+
+    # -b flag for bayesian autoregressive model
+    # -e flag for energy model
+
+
+
+
+
 
