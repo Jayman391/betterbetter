@@ -2,8 +2,8 @@ package src
 
 import (
 	"fmt"
+	"io"
 	"net/http"
-  "io"
 )
 
 func FetchData(sport string, requestType string, args map[string]string) string {
@@ -24,11 +24,11 @@ func FetchData(sport string, requestType string, args map[string]string) string 
 	if requestType == "player"{
 		url = url + "/players?"
 	}
-	if requestType == "team-stats"{
+	if requestType == "team-stats" || requestType == "player-stats" {
 		url = url + "/players/statistics?"
 	}
-	if requestType == "player-stats"{
-		url = url + "/players/statistics?"
+	if requestType == "game"{
+		url = url + "/games?"
 	}
 
 	fmt.Println(url)
@@ -78,3 +78,41 @@ func FetchData(sport string, requestType string, args map[string]string) string 
 }
 
 
+func FetchOdds(date string) string {
+
+	url := "https://api.the-odds-api.com/v4/historical/sports/basketball_nba/events?"
+	
+	url += "apiKey=8a2e6be65caa1f5af89fca660c4e7eaa"
+
+	url += "&date=" + date
+
+	fmt.Println(url)
+
+	client := &http.Client {}
+
+	req, err := http.NewRequest("GET", url, nil)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	res, err := client.Do(req)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println(res)
+
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+  if err != nil {
+    fmt.Println(err)
+  }
+  
+	responseString := string(body)
+
+	return responseString
+
+}

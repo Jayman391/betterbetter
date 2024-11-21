@@ -1,15 +1,15 @@
 package cmd
 
 import (
-	"fmt"
-
-	"github.com/spf13/cobra"
-
 	"betterbetter/src"
 
+	"fmt"
 	"os"
-
 	"strings"
+	"strconv"
+	"time"
+
+	"github.com/spf13/cobra"
 )
 
 type mapFunc[E any] func(E) E
@@ -32,16 +32,22 @@ func init() {
 	var Teams []string
 	var Players []string
 
-	FetchCmd.Flags().StringVarP(&Sport, "sport", "s", "", "Sport to fetch data for")
-	FetchCmd.Flags().StringSliceVarP(&Players, "players", "p", []string{}, "players to fetch data for")
-	FetchCmd.Flags().StringSliceVarP(&Teams, "teams", "t", []string{}, "teams to fetch data for")
-	FetchCmd.Flags().StringVarP(&Year, "year", "y", "", "Year to fetch data for")
+	FetchDataCmd.Flags().StringVarP(&Sport, "sport", "s", "", "Sport to fetch data for")
+	FetchDataCmd.Flags().StringSliceVarP(&Players, "players", "p", []string{}, "players to fetch data for")
+	FetchDataCmd.Flags().StringSliceVarP(&Teams, "teams", "t", []string{}, "teams to fetch data for")
+	FetchDataCmd.Flags().StringVarP(&Year, "year", "y", "", "Year to fetch data for")
 
-	rootCmd.AddCommand(FetchCmd)
+	FetchOddsCmd.Flags().StringVarP(&Sport, "sport", "s", "", "Sport to fetch odds for")
+	FetchOddsCmd.Flags().StringSliceVarP(&Teams, "teams", "t", []string{}, "teams to fetch data for")
+	FetchOddsCmd.Flags().StringVarP(&Year, "date", "d", "", "YYYY-MM-DD date to fetch odds for")
+
+
+	rootCmd.AddCommand(FetchDataCmd)
+	rootCmd.AddCommand(FetchOddsCmd)
 }
 
-var FetchCmd = &cobra.Command{
-	Use:   "fetch",
+var FetchDataCmd = &cobra.Command{
+	Use:   "fetchdata",
 	Short: "Fetch sports data",
 	Long:  `Fetch sports data from the internet`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -168,6 +174,25 @@ var FetchCmd = &cobra.Command{
 					return
 				}
 				fmt.Println("Team stats saved successfully.")
+
+				Games := src.FetchData(sport, "game", statsParams)
+				if Games == "" {
+					fmt.Println("No games data found")
+					return
+				}
+
+				// Save the stats data to a JSON file
+				gamesParsed := src.ParseData(Games)
+				if gamesParsed == nil {
+					fmt.Println("Error parsing games data")
+					return
+				}
+				err = src.SaveToFile(gamesParsed, fmt.Sprintf("data/%s/%s/%s",sport, year, string(team)), "games.json")
+				if err != nil {
+					fmt.Printf("Error saving games: %v\n", err)
+					return
+				}
+				fmt.Println("Games saved successfully.")
 			}
 		}
 
@@ -252,4 +277,47 @@ var FetchCmd = &cobra.Command{
 		}
 	}
 },
+}
+
+var FetchOddsCmd = &cobra.Command{
+	Use:   "fetchodds",
+	Short: "Fetch odds data",
+	Long:  `Fetch odds data from the internet`,
+	Run: func(cmd *cobra.Command, args []string) {
+		
+		// sport := cmd.Flag("sport").Value.String()
+		date := cmd.Flag("date").Value.String()
+
+		// split by - into year, month, day
+		dateArr := strings.Split(date, "-")	
+		// make int array 3 long
+		intDateArr := make([]int, 3)
+
+		
+
+		// convert to int
+		for i, v := range dateArr {
+			intValue, err := strconv.Atoi(v)
+			if err != nil {
+				fmt.Println("Error converting date to int")
+				return
+			}
+			intDateArr[i] =  intValue
+		}
+
+		dateObj := time.Date(intDateArr[0], time.Month(intDateArr[1]), intDateArr[2], 0, 0, 0, 0, time.UTC)
+
+		formattedDate := dateObj.UTC().Format(time.RFC3339)
+
+		odds := src.FetchOdds(formattedDate)
+		
+		parsed_odds := src.ParseData(odds)
+
+		fmt.Println(parsed_odds["data"])
+		
+
+		// teams := strings.Split(cmd.Flag("teams").Value.String(), ",")
+		// teams = Map(teams, TrimBracket)
+
+	},
 }
