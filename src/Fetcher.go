@@ -78,10 +78,13 @@ func FetchData(sport string, requestType string, args map[string]string) string 
 }
 
 
-func FetchOdds(date string) string {
-
-	url := "https://api.the-odds-api.com/v4/historical/sports/basketball_nba/events?"
+func FetchGames(date string, sport string) string {
+	url := ""
 	
+	if sport == "nba" {
+		url = "https://api.the-odds-api.com/v4/historical/sports/basketball_nba/events?"
+	}
+
 	url += "apiKey=8a2e6be65caa1f5af89fca660c4e7eaa"
 
 	url += "&date=" + date
@@ -115,4 +118,49 @@ func FetchOdds(date string) string {
 
 	return responseString
 
+}
+
+func FetchOdds(date string, sport string, id string) any {
+	url := ""
+
+	if sport == "nba" {
+		url = "https://api.the-odds-api.com/v4/historical/sports/basketball_nba/events"
+	}
+
+	url += "/" + id + "/odds?apiKey=8a2e6be65caa1f5af89fca660c4e7eaa"
+
+	url += "&date=" + date + "&regions=us" + "&markets=player_points,player_rebounds,player_assists,player_blocks,player_steals,"
+
+	url += "player_turnovers,h2h,spreads,totals,player_blocks_steals,player_points_rebounds,player_points_assists,"
+
+	url += "player_rebounds_assists,player_points_rebounds_assists,player_first_basket,player_double_double,player_triple_double"
+
+	fmt.Println(url)
+
+	client := &http.Client {}
+
+	req, err := http.NewRequest("GET", url, nil)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	res, err := client.Do(req)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println(res)
+
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+  if err != nil {
+    fmt.Println(err)
+  }
+  
+	responseString := string(body)
+
+	return responseString	
 }

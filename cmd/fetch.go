@@ -320,8 +320,10 @@ var FetchOddsCmd = &cobra.Command{
 			// Format the date in RFC3339 format
 			formattedDate := dateObj.UTC().Format(time.RFC3339)
 
+			sport := cmd.Flag("sport").Value.String()
+
 			// Fetch and parse odds data
-			odds := src.FetchOdds(formattedDate)
+			odds := src.FetchGames(formattedDate, sport)
 			parsedOdds := src.ParseData(odds)
 
 			// Retrieve the "data" key from parsed_odds
@@ -371,6 +373,15 @@ var FetchOddsCmd = &cobra.Command{
 			}
 
 			// Print the filtered games
-			fmt.Println(filteredGames)
+
+			for _, game := range filteredGames {
+				odds := src.FetchOdds(formattedDate, sport, game["id"].(string))
+				parsedOdds := src.ParseData(odds.(string))	
+				err := src.SaveToFile(parsedOdds, fmt.Sprintf("data/%s/%s/%s/%s",sport,dateArr[0], date, game["away_team"].(string) + "_" + game["home_team"].(string)), "odds.json")
+				if err != nil {
+					fmt.Printf("Error saving odds data: %v\n", err)
+					return
+				}	
+			}
 	},
 }
