@@ -284,40 +284,93 @@ var FetchOddsCmd = &cobra.Command{
 	Short: "Fetch odds data",
 	Long:  `Fetch odds data from the internet`,
 	Run: func(cmd *cobra.Command, args []string) {
-		
-		// sport := cmd.Flag("sport").Value.String()
-		date := cmd.Flag("date").Value.String()
 
-		// split by - into year, month, day
-		dateArr := strings.Split(date, "-")	
-		// make int array 3 long
-		intDateArr := make([]int, 3)
+			// Retrieve the date flag value
+			date := cmd.Flag("date").Value.String()
 
-		
-
-		// convert to int
-		for i, v := range dateArr {
-			intValue, err := strconv.Atoi(v)
-			if err != nil {
-				fmt.Println("Error converting date to int")
-				return
+			// Split the date by "-" into year, month, day
+			dateArr := strings.Split(date, "-")
+			if len(dateArr) != 3 {
+					fmt.Println("Error: Date must be in the format YYYY-MM-DD")
+					return
 			}
-			intDateArr[i] =  intValue
-		}
 
-		dateObj := time.Date(intDateArr[0], time.Month(intDateArr[1]), intDateArr[2], 0, 0, 0, 0, time.UTC)
+			// Initialize a slice with length 3 to hold year, month, day as integers
+			intDateArr := make([]int, 3)
 
-		formattedDate := dateObj.UTC().Format(time.RFC3339)
+			// Convert each part of the date to an integer
+			for i, v := range dateArr {
+					intValue, err := strconv.Atoi(v)
+					if err != nil {
+							fmt.Printf("Error converting %s to int: %v\n", v, err)
+							return
+					}
+					intDateArr[i] = intValue
+			}
 
-		odds := src.FetchOdds(formattedDate)
-		
-		parsed_odds := src.ParseData(odds)
+			// Create a time.Time object from the integer date components
+			dateObj := time.Date(
+					intDateArr[0],
+					time.Month(intDateArr[1]),
+					intDateArr[2],
+					0, 0, 0, 0,
+					time.UTC,
+			)
 
-		fmt.Println(parsed_odds["data"])
-		
+			// Format the date in RFC3339 format
+			formattedDate := dateObj.UTC().Format(time.RFC3339)
 
-		// teams := strings.Split(cmd.Flag("teams").Value.String(), ",")
-		// teams = Map(teams, TrimBracket)
+			// Fetch and parse odds data
+			odds := src.FetchOdds(formattedDate)
+			parsedOdds := src.ParseData(odds)
 
+			// Retrieve the "data" key from parsed_odds
+			gamesInterface, ok := parsedOdds["data"].([]interface{})
+			if !ok {
+					fmt.Println("Invalid or missing game data")
+					return
+			}
+
+
+			// Retrieve and process the "teams" flag
+			teamsFlag := cmd.Flag("teams").Value.String()
+			if teamsFlag == "" {
+					fmt.Println("Error: Teams flag is required")
+					return
+			}
+
+			teams := strings.Split(teamsFlag, ",")
+			teams = Map(teams, TrimBracket) // Ensure Map and TrimBracket are defined
+
+			// Initialize a slice to hold filtered games
+			filteredGames := []map[string]interface{}{}
+
+			// Iterate over each game
+			for _, gameInterface := range gamesInterface {
+					game, ok := gameInterface.(map[string]interface{})
+					if !ok {
+							fmt.Println("Invalid game object format")
+							continue
+					}
+
+					// Extract home and away teams
+					homeTeam, homeOk := game["home_team"].(string)
+					awayTeam, awayOk := game["away_team"].(string)
+					if !homeOk || !awayOk {
+							fmt.Println("Missing team information in game data")
+							continue
+					}
+
+					// Check if either team matches any of the specified teams
+					for _, team := range teams {
+							if strings.Contains(homeTeam, team) || strings.Contains(awayTeam, team) {
+									filteredGames = append(filteredGames, game)
+									break // Avoid duplicate entries if multiple teams match
+							}
+					}
+			}
+
+			// Print the filtered games
+			fmt.Println(filteredGames)
 	},
 }
