@@ -4,20 +4,9 @@ import (
 	"gonum.org/v1/gonum/mat"
 	"gonum.org/v1/gonum/stat/distuv"
 	"math"
-
+	"slices"
 	"fmt"
 )
-
-// Map function for generic slices
-type mapFunc[E any] func(E) E
-
-func Map[S ~[]E, E any](s S, f mapFunc[E]) S {
-	result := make(S, len(s))
-	for i := range s {
-		result[i] = f(s[i])
-	}
-	return result
-}
 
 // Distribution interface
 type Distribution interface {
@@ -28,6 +17,27 @@ type Distribution interface {
 type DistributionParams struct {
 	Dist   string
 	Params map[string]float64
+}
+
+type Prior struct {
+	Distribution Distribution
+}
+
+type Likelihood struct {
+	Params             []float64
+	DistributionParams DistributionParams
+	Data               mat.Matrix
+}
+
+type Posterior struct {
+	Priors []Prior
+	Data   mat.Matrix
+	LikelihoodParams DistributionParams
+}
+
+type PosteriorResult struct {
+	Params      []float64
+	Probability float64
 }
 
 func (d *DistributionParams) CreateDist() Distribution {
@@ -99,56 +109,6 @@ func (d *DistributionParams) CreateDist() Distribution {
 	}
 }
 
-func SampleDist(dist Distribution, num_samples int) []float64 {
-	if dist == nil {
-		return nil
-	}
-	samples := make([]float64, num_samples)
-	for i := 0; i < num_samples; i++ {
-		samples[i] = dist.Rand()
-	}
-	return samples
-}
-
-type Likelihood struct {
-	Params             []float64
-	DistributionParams DistributionParams
-	Data               mat.Matrix
-}
-
-func getParamKeys(distType string) []string {
-	switch distType {
-	case "Normal":
-		return []string{"Mu", "Sigma"}
-	case "Bernoulli":
-		return []string{"P"}
-	case "Beta":
-		return []string{"Alpha", "Beta"}
-	case "Binomial":
-		return []string{"N", "P"}
-	case "ChiSquared":
-		return []string{"K"}
-	case "Exponential":
-		return []string{"Rate"}
-	case "Gamma":
-		return []string{"Alpha", "Beta"}
-	case "LogNormal":
-		return []string{"Mu", "Sigma"}
-	case "Pareto":
-		return []string{"Xm", "Alpha"}
-	case "Poisson":
-		return []string{"Lambda"}
-	case "StudentsT":
-		return []string{"Mu", "Sigma", "Nu"}
-	case "Uniform":
-		return []string{"Min", "Max"}
-	case "Weibull":
-		return []string{"K", "Lambda"}
-	default:
-		return nil
-	}
-}
-
 func (l *Likelihood) CalcLikelihood() float64 {
 	numRows, numCols := l.Data.Dims()
 
@@ -190,48 +150,6 @@ func (l *Likelihood) CalcLikelihood() float64 {
 	}
 
 	return logSum
-}
-
-type Prior struct {
-	Distribution Distribution
-}
-
-type Posterior struct {
-	Priors []Prior
-	Data   mat.Matrix
-	LikelihoodParams DistributionParams
-}
-
-type PosteriorResult struct {
-	Params      []float64
-	Probability float64
-}
-
-func Combination(current [][]float64, next []float64) [][]float64 {
-	var result [][]float64
-	for _, c := range current {
-		for _, n := range next {
-			combined := append(append([]float64{}, c...), n)
-			result = append(result, combined)
-		}
-	}
-	return result
-}
-
-func Sum(data []float64) float64 {
-	var total float64
-	for _, val := range data {
-		total += val
-	}
-	return total
-}
-
-func Normalize(data []float64) []float64 {
-	sum := Sum(data)
-	for i, val := range data {
-		data[i] = val / sum
-	}
-	return data
 }
 
 func (p *Posterior) CalcPosterior() []PosteriorResult {
@@ -287,16 +205,97 @@ func (p *Posterior) CalcPosterior() []PosteriorResult {
 	return results
 }
 
-type Sampler struct {
-	Params       map[string]float64
-	initialState mat.Matrix
-	priors       []Prior
-	Likelihood   Likelihood
-}
+
 
 type BayesianModel struct {
 	priors     []Prior
 	likelihood Likelihood
 	posterior  Posterior
 	sampler    Sampler
+}
+
+/// Helper functions
+// Map function for generic slices
+type mapFunc[E any] func(E) E
+
+func Map[S ~[]E, E any](s S, f mapFunc[E]) S {
+	result := make(S, len(s))
+	for i := range s {
+		result[i] = f(s[i])
+	}
+	return result
+}
+
+func SampleDist(dist Distribution, num_samples int) []float64 {
+	if dist == nil {
+		return nil
+	}
+	samples := make([]float64, num_samples)
+	for i := 0; i < num_samples; i++ {
+		samples[i] = dist.Rand()
+	}
+
+	slices.Sort(samples)
+
+	return samples
+}
+
+func getParamKeys(distType string) []string {
+	switch distType {
+	case "Normal":
+		return []string{"Mu", "Sigma"}
+	case "Bernoulli":
+		return []string{"P"}
+	case "Beta":
+		return []string{"Alpha", "Beta"}
+	case "Binomial":
+		return []string{"N", "P"}
+	case "ChiSquared":
+		return []string{"K"}
+	case "Exponential":
+		return []string{"Rate"}
+	case "Gamma":
+		return []string{"Alpha", "Beta"}
+	case "LogNormal":
+		return []string{"Mu", "Sigma"}
+	case "Pareto":
+		return []string{"Xm", "Alpha"}
+	case "Poisson":
+		return []string{"Lambda"}
+	case "StudentsT":
+		return []string{"Mu", "Sigma", "Nu"}
+	case "Uniform":
+		return []string{"Min", "Max"}
+	case "Weibull":
+		return []string{"K", "Lambda"}
+	default:
+		return nil
+	}
+}
+
+func Combination(current [][]float64, next []float64) [][]float64 {
+	var result [][]float64
+	for _, c := range current {
+		for _, n := range next {
+			combined := append(append([]float64{}, c...), n)
+			result = append(result, combined)
+		}
+	}
+	return result
+}
+
+func Sum(data []float64) float64 {
+	var total float64
+	for _, val := range data {
+		total += val
+	}
+	return total
+}
+
+func Normalize(data []float64) []float64 {
+	sum := Sum(data)
+	for i, val := range data {
+		data[i] = val / sum
+	}
+	return data
 }
