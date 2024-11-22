@@ -1,13 +1,15 @@
+// cmd/bayes.go
+
 package cmd
 
 import (
-	"betterbetter/src"
 	"fmt"
+
+	"betterbetter/src"
+
 	"github.com/spf13/cobra"
-	"log"
-	"slices"
 	"gonum.org/v1/gonum/mat"
-	"github.com/spatialcurrent/go-math/pkg/math"
+	"golang.org/x/exp/slices" // Ensure you have Go 1.21+ for the slices package
 )
 
 func init() {
@@ -19,73 +21,71 @@ var bayesCmd = &cobra.Command{
 	Short: "Bayesian Network",
 	Long:  `Bayesian Network`,
 	Run: func(cmd *cobra.Command, args []string) {
-			// Initialize DistributionParams with exported fields
-			testdist := src.DistributionParams{
-					Dist: "Normal",
-					Params: map[string]float64{
-							"Mu":    0.0,
-							"Sigma": 1.0,
-					},
-			}
-
-			// Invoke the CreateDist method
-			dist := testdist.CreateDist()
-			if dist == nil {
-					log.Fatal("Unsupported distribution type or missing parameters.")
-			}
-
-			samples := src.SampleDist(dist, 1000)
-
-
-			// sort the samples
-			
-
-			slices.Sort(samples)
-
-
 		
-			// turn sampledata tp a mat.Matrix
-			
-			sampledataMat := mat.NewDense(len(samples), 1, samples)
+		// Step 6: Initialize Priors for Mu and Sigma
+		// Assuming priors for Mu and Sigma are both Normal distributions
+		priorMuParams := src.DistributionParams{
+			Dist: "Normal",
+			Params: map[string]float64{
+				"Mu":    0.0, // Prior mean for Mu
+				"Sigma": 1.0, // Prior standard deviation for Mu
+			},
+		}
+		priorSigmaParams := src.DistributionParams{
+			Dist: "Normal",
+			Params: map[string]float64{
+				"Mu":    0.0, // Prior mean for Sigma
+				"Sigma": 1.0, // Prior standard deviation for Sigma
+			},
+		}
 
-			// get first sample and make it a list
-		  sampledatatest := []float64{samples[500]}
+		// Step 7: Create Prior Distributions
+		priorMuDist := priorMuParams.CreateDist()
+		
+		priorSigmaDist := priorSigmaParams.CreateDist()
+	
 
-			likelihood := src.Likelihood{sampledatatest, sampledataMat}
+		// Step 8: Sample from Priors
+		priorMuSamples := src.SampleDist(priorMuDist, 50)
+		priorSigmaSamples := src.SampleDist(priorSigmaDist, 50)
+		slices.Sort(priorMuSamples)
+		slices.Sort(priorSigmaSamples)
 
-			calculated := likelihood.CalcLikelihood()
+		// Step 9: Combine Prior Samples into a Matrix
+		numSamples := len(priorMuSamples)
+		priorDataMat := mat.NewDense(numSamples, 2, nil) // 2 columns: Mu and Sigma
+		for i := 0; i < numSamples; i++ {
+			priorDataMat.Set(i, 0, priorMuSamples[i])    // Mu samples
+			priorDataMat.Set(i, 1, priorSigmaSamples[i]) // Sigma samples
+		}
 
-			sum, err := math.Sum(calculated)
-			if err != nil {
-				log.Fatal(err)
-			}
-			fmt.Println(sum)
+		// Step 10: Define Priors
+		priorObjMu := src.Prior{Distribution: priorMuDist}
+		priorObjSigma := src.Prior{Distribution: priorSigmaDist}
+		priors := []src.Prior{priorObjMu, priorObjSigma}
 
-			anothersampledatatest := []float64{samples[0]}
+		// Step 11: Calculate the Posterior
+		post := src.Posterior{
+			Priors: priors,
+			Data:   priorDataMat,
+			LikelihoodParams: src.DistributionParams{
+				Dist: "Normal",
+				Params: map[string]float64{
+					"Mu":    0.0, // Likelihood mean
+					"Sigma": 1.0, // Likelihood standard deviation
+				},
+			},
+		}
 
-			likelihood2 := src.Likelihood{anothersampledatatest, sampledataMat}
+		posteriorResults := post.CalcPosterior()
 
-			calculated2 := likelihood2.CalcLikelihood()
+		totalProb := 0.0
 
-			sum2, err := math.Sum(calculated2)
 
-			if err != nil {
-				log.Fatal(err)
-			}
-			fmt.Println(sum2)
-
-			aanothersampledatatest := []float64{samples[999]}
-
-			alikelihood2 := src.Likelihood{aanothersampledatatest, sampledataMat}
-
-			acalculated2 := alikelihood2.CalcLikelihood()
-
-			asum2, err := math.Sum(acalculated2)
-
-			if err != nil {
-				log.Fatal(err)
-			}
-			fmt.Println(asum2)
-
+		for _, res := range posteriorResults {
+			fmt.Printf("Params: Mu = %f, Sigma = %f, Probability: %f\n", res.Params[0], res.Params[1], res.Probability)
+			totalProb += res.Probability
+		}
+		fmt.Println("Total Probability:", totalProb)
 	},
 }
