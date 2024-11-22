@@ -4,6 +4,7 @@ import (
 	"gonum.org/v1/gonum/mat"
 	"gonum.org/v1/gonum/stat/distuv"
 	"math"
+	"math/rand"
 	"slices"
 	"fmt"
 )
@@ -33,6 +34,7 @@ type Posterior struct {
 	Priors []Prior
 	Data   mat.Matrix
 	LikelihoodParams DistributionParams
+	MarkovChain 		MarkovChain
 }
 
 type PosteriorResult struct {
@@ -115,34 +117,26 @@ func (l *Likelihood) CalcLikelihood() float64 {
 	// Get the ordered list of parameter keys for the distribution
 	paramKeys := getParamKeys(l.DistributionParams.Dist)
 
-	fmt.Println(l.Params)
-
 	// Map the slice values to the Params map
 	for i, key := range paramKeys {
-		fmt.Println("Key:", key)
 		l.DistributionParams.Params[key] = l.Params[i]
 	}
-	fmt.Println(l.DistributionParams)
 	// Create the distribution
 	dist := l.DistributionParams.CreateDist()
 
-	fmt.Println("Distribution:", dist)
 	var logSum float64 = 0.0
 	// Calculate log-likelihood for each row
 	for i := 0; i < numRows; i++ {
 		
 		for j := 0; j < numCols; j++ {
 			dataPoint := l.Data.At(i, j)
-			fmt.Println("Data point:", dataPoint)
 			cdf := dist.CDF(dataPoint) // Consider using PDF instead
-			fmt.Println("CDF:", cdf)
 			if cdf <= 0 {
 				// Handle cases where CDF is zero or negative
 				logLiklihood := math.Inf(-1)
 				fmt.Println("Log likelihood:", logLiklihood)
 			} else {
-				logLiklihood := math.Log10(cdf)
-				fmt.Println("Log likelihood:", logLiklihood)
+				logLiklihood := -math.Log10(cdf)
 				logSum += logLiklihood
 			}	
 		}
@@ -153,52 +147,36 @@ func (l *Likelihood) CalcLikelihood() float64 {
 }
 
 func (p *Posterior) CalcPosterior() []PosteriorResult {
-	numpriors := len(p.Priors)
+	// Create the grid
+	p.MarkovChain.CreateGrid()
 
-	// Sample the first prior and initialize the Cartesian product
-	first := SampleDist(p.Priors[0].Distribution, 50)
-	var cart [][]float64
-	for _, f := range first {
-		cart = append(cart, []float64{f})
+
+	// generate initial state for the Markov Chain (random row in grid)
+	numCombos := p.MarkovChain.Grid.RawMatrix().Rows
+
+	index := rand.Intn(numCombos)
+
+	numsteps := 200
+
+	likelihoods := make([]float64, numsteps + 1)
+	indices := make([]int64, numsteps + 1)
+
+	switch p.MarkovChain.Sampler {
+		case "UnitRandomWalk":
+			indices, likelihoods = p.MarkovChain.UnitRandomWalk(int64(index), numsteps)
+	}
+	
+	for l := range likelihoods {
+		likelihoods[l] = 1 / likelihoods[l]
 	}
 
-	// Iteratively calculate Cartesian products with remaining priors
-	for prior := 1; prior < numpriors; prior++ {
-		sampled := SampleDist(p.Priors[prior].Distribution, 50)
-		cart = Combination(cart, sampled)
-	}
-
-	fmt.Println("Cartesian product:", cart)
-
-	// Calculate likelihoods for each combination
-	likelihoods := make([]float64, len(cart))
-	for i, row := range cart {
-		likelihood := Likelihood{Params: row, Data: p.Data, DistributionParams: p.LikelihoodParams}
-		individuals := likelihood.CalcLikelihood()
-  	likelihoods[i] = individuals
-	}
-
-	fmt.Println("Likelihoods:", likelihoods)
-
-	maxLL  := -999999999999.0
-	for _, ll := range likelihoods {
-		if ll > maxLL {
-			maxLL = ll
-		}
-	}
-	fmt.Println("Max Log Likelihood:", maxLL)
-	for i, ll := range likelihoods {
-		likelihoods[i] = math.Exp(ll - maxLL)
-	}
-	fmt.Println("Pre-Normalized Standardized likelihoods:", likelihoods)
 	likelihoods = Normalize(likelihoods)
 
-	fmt.Println("Normalized likelihoods:", likelihoods)
 	// Collect results
-	results := make([]PosteriorResult, len(cart))
-	for i := range cart {
+	results := make([]PosteriorResult, len(indices))
+	for i := range indices {
 		results[i] = PosteriorResult{
-			Params:      cart[i],
+			Params:      p.MarkovChain.Grid.RawRowView(int(indices[i])),
 			Probability: likelihoods[i],
 		}
 	}
@@ -211,7 +189,6 @@ type BayesianModel struct {
 	priors     []Prior
 	likelihood Likelihood
 	posterior  Posterior
-	sampler    Sampler
 }
 
 /// Helper functions

@@ -9,7 +9,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"gonum.org/v1/gonum/mat"
-	"golang.org/x/exp/slices" // Ensure you have Go 1.21+ for the slices package
 )
 
 func init() {
@@ -25,17 +24,15 @@ var bayesCmd = &cobra.Command{
 		// Step 6: Initialize Priors for Mu and Sigma
 		// Assuming priors for Mu and Sigma are both Normal distributions
 		priorMuParams := src.DistributionParams{
-			Dist: "Normal",
+			Dist: "Exponential",
 			Params: map[string]float64{
-				"Mu":    0.0, // Prior mean for Mu
-				"Sigma": 1.0, // Prior standard deviation for Mu
+				"Rate": 1.0,
 			},
 		}
 		priorSigmaParams := src.DistributionParams{
-			Dist: "Normal",
+			Dist: "Exponential",
 			Params: map[string]float64{
-				"Mu":    0.0, // Prior mean for Sigma
-				"Sigma": 1.0, // Prior standard deviation for Sigma
+				"Rate": 1.0,
 			},
 		}
 
@@ -45,36 +42,60 @@ var bayesCmd = &cobra.Command{
 		priorSigmaDist := priorSigmaParams.CreateDist()
 	
 
-		// Step 8: Sample from Priors
-		priorMuSamples := src.SampleDist(priorMuDist, 50)
-		priorSigmaSamples := src.SampleDist(priorSigmaDist, 50)
-		slices.Sort(priorMuSamples)
-		slices.Sort(priorSigmaSamples)
-
-		// Step 9: Combine Prior Samples into a Matrix
-		numSamples := len(priorMuSamples)
-		priorDataMat := mat.NewDense(numSamples, 2, nil) // 2 columns: Mu and Sigma
-		for i := 0; i < numSamples; i++ {
-			priorDataMat.Set(i, 0, priorMuSamples[i])    // Mu samples
-			priorDataMat.Set(i, 1, priorSigmaSamples[i]) // Sigma samples
+		// Step 8: generate Fake Data
+		dataparams := src.DistributionParams{
+			Dist: "Normal",
+			Params: map[string]float64{
+				"Mu":    0.0, // Likelihood mean
+				"Sigma": 1.0, // Likelihood standard deviation
+			},
 		}
 
-		// Step 10: Define Priors
+		datadist := dataparams.CreateDist()
+
+		data := src.SampleDist(datadist, 1000)
+
+		datamatrix := mat.NewDense(len(data), 1, data)
+
+		// Step 9: Define Priors
 		priorObjMu := src.Prior{Distribution: priorMuDist}
 		priorObjSigma := src.Prior{Distribution: priorSigmaDist}
 		priors := []src.Prior{priorObjMu, priorObjSigma}
 
-		// Step 11: Calculate the Posterior
+		
+
+		// Step 10: Create Likelihood
+
+		LikelihoodParams := src.DistributionParams{
+			Dist: "Normal",
+			Params: map[string]float64{
+				"Mu":    0.0, // Likelihood mean
+				"Sigma": 1.0, // Likelihood standard deviation
+			},
+		}
+
+		Likelihood := src.Likelihood{
+			Params : []float64{0.0, 1.0},
+			DistributionParams: LikelihoodParams,
+			Data: datamatrix,
+		}
+
+		// Step 11: Create Markov Chain
+		mc := src.MarkovChain{
+			Distributions: []src.Distribution{priorMuDist, priorSigmaDist},
+			Grid: 				mat.Dense{},
+			Likelihood: Likelihood,
+			SampleSize: 50,
+			Sampler: "UnitRandomWalk",
+		}
+
+		// Step 12: Create Posterior
+
 		post := src.Posterior{
 			Priors: priors,
-			Data:   priorDataMat,
-			LikelihoodParams: src.DistributionParams{
-				Dist: "Normal",
-				Params: map[string]float64{
-					"Mu":    0.0, // Likelihood mean
-					"Sigma": 1.0, // Likelihood standard deviation
-				},
-			},
+			Data:   datamatrix,
+			LikelihoodParams: LikelihoodParams,
+			MarkovChain: mc,
 		}
 
 		posteriorResults := post.CalcPosterior()
