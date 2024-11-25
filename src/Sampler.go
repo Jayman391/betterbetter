@@ -204,18 +204,80 @@ func (m *MarkovChain) GaussianRandomWalk(index int64, numsteps int) ([]int64, []
 
 }
 
-func (m *MarkovChain) MetropolisHastings(initialConditions []float64, numsteps int) {
-	// find closest point in grid to initial conditions
-	// calculate likelihood of initial point
-	// find neighbors of closest point
-	// calculate likelihoods of each neighbor
-	// normalize likelihoods from just the neighbors
-	// randomly select neighbor based on normalized likelihood
-	// calculate acceptance ratio of new point compared to old point
-	// take new likelihood divided by old likelihood
-	// generate random number between 0 and 1
-	// if random number is less than acceptance ratio, accept new point
+func (m *MarkovChain) MetropolisHastings(index int64, numsteps int) ([]int64, []float64) {
+	indices := make([]int64, numsteps+1)
+	likelihoods := make([]float64, numsteps+1)
+
+	// Initialize
+	currentIndex := index
+	point := m.Grid.RawRowView(int(currentIndex))
+	m.Likelihood.Params = point
+	currentLikelihood := m.Likelihood.CalcLikelihood()
+
+	indices[0] = currentIndex
+	likelihoods[0] = currentLikelihood
+
+	// Metropolis-Hastings Sampling
+	for i := 1; i <= numsteps; i++ {
+			// Propose a new index (neighbor)
+			neighbors := m.GetNeighbors(currentIndex)
+			numNeighbors := len(neighbors)
+
+			// Compute likelihoods of neighbors
+			neighborLikelihoods := make([]float64, numNeighbors)
+			totalLikelihood := 0.0
+			for j, neighborIndex := range neighbors {
+					if neighborIndex < 0 {
+							neighborIndex += int64(m.Grid.RawMatrix().Rows)
+					} else if neighborIndex >= int64(m.Grid.RawMatrix().Rows) {
+							neighborIndex -= int64(m.Grid.RawMatrix().Rows)
+					}
+					neighborPoint := m.Grid.RawRowView(int(neighborIndex))
+					m.Likelihood.Params = neighborPoint
+					likelihood := math.Exp(-m.Likelihood.CalcLikelihood())
+					neighborLikelihoods[j] = likelihood
+					totalLikelihood += likelihood
+			}
+
+        // Normalize neighbor likelihoods to create a probability distribution
+        for j := range neighborLikelihoods {
+            neighborLikelihoods[j] /= totalLikelihood
+        }
+
+        // Sample a neighbor index weighted by likelihoods
+        proposedIndex := weightedSample(neighbors, neighborLikelihoods)
+
+			// Handle index wrapping
+			if proposedIndex < 0 {
+					proposedIndex += int64(m.Grid.RawMatrix().Rows)
+			} else if proposedIndex >= int64(m.Grid.RawMatrix().Rows) {
+					proposedIndex -= int64(m.Grid.RawMatrix().Rows)
+			}
+
+			// Compute likelihood of proposed state
+			proposedPoint := m.Grid.RawRowView(int(proposedIndex))
+			m.Likelihood.Params = proposedPoint
+			proposedLikelihood := m.Likelihood.CalcLikelihood()
+
+			// Acceptance probability
+			acceptanceRatio := proposedLikelihood / currentLikelihood
+
+			// Accept or reject the proposal
+			if rand.Float64() < acceptanceRatio {
+					// Accept the proposed state
+					currentIndex = proposedIndex
+					currentLikelihood = proposedLikelihood
+			}
+			// Record the current state
+			indices[i] = currentIndex
+			likelihoods[i] = currentLikelihood
+	}
+
+	indices, likelihoods = RemoveDuplicates(indices, likelihoods)
+
+	return indices, likelihoods
 }
+
 
 func (m *MarkovChain) HMC(initialConditions []float64, numsteps int, timestep float64) {
 	// https://faculty.washington.edu/yenchic/19A_stat535/Lec9_HMC.pdf
@@ -255,21 +317,25 @@ func (m *MarkovChain) CreateGrid()  {
 }
 
 
-func  (m *MarkovChain) GetNeighbors(point int64) []int64 {
-	// Take index of row 
-		// starting with the last column, neighbors are index + 1 and index - 1
-			// for each next row, neighbors are index + 1 + Samplesize * x and index - 1 - Samplesize * x
-		
-	neighbors := []int64{point+1, point-1}
+func (m *MarkovChain) GetNeighbors(index int64) []int64 {
+	neighbors := []int64{}
 
-	for i := 1; i < m.Grid.RawMatrix().Cols; i++ {
-		neighbors = append(neighbors, (point+1+int64(m.SampleSize)*int64(i))%int64(m.Grid.RawMatrix().Rows))
-		neighbors = append(neighbors, (point-1-int64(m.SampleSize)*int64(i))%int64(m.Grid.RawMatrix().Rows))
+	// For each dimension, consider moving +1 or -1 step
+	for dim := 0; dim < m.Grid.RawMatrix().Cols; dim++ {
+			step := int64(math.Pow(float64(m.SampleSize), float64(dim)))
+
+			// Move forward in this dimension
+			forward := (index + step) % int64(m.Grid.RawMatrix().Rows)
+			neighbors = append(neighbors, forward)
+
+			// Move backward in this dimension
+			backward := (index - step + int64(m.Grid.RawMatrix().Rows)) % int64(m.Grid.RawMatrix().Rows)
+			neighbors = append(neighbors, backward)
 	}
 
 	return neighbors
-
 }
+
 
 func ClosestPoint(grid mat.Dense, point []float64) int64 {
 	// turn point to Vector
@@ -296,18 +362,33 @@ func ClosestPoint(grid mat.Dense, point []float64) int64 {
 }
 
 func RemoveDuplicates(indices []int64, likelihoods []float64) ([]int64, []float64) {
+	seen := make(map[int64]bool)
+	var newIndices []int64
+	var newLikelihoods []float64
 
-	// if there are duplicate indices, remove the repeated indices and likelihoods
-	for i := 0; i < len(indices); i++ {
-		for j := i + 1; j < len(indices); j++ {
-			if indices[i] == indices[j] {
-				// remove jth element from indices and likelihoods
-				indices = append(indices[:j], indices[j+1:]...)
-				likelihoods = append(likelihoods[:j], likelihoods[j+1:]...)
+	for i, index := range indices {
+			if !seen[index] {
+					seen[index] = true
+					newIndices = append(newIndices, index)
+					newLikelihoods = append(newLikelihoods, likelihoods[i])
 			}
-		}
 	}
 
-	return indices, likelihoods
-
+	return newIndices, newLikelihoods
 }
+
+func weightedSample(indices []int64, weights []float64) int64 {
+	cumulativeWeights := make([]float64, len(weights))
+	cumulativeWeights[0] = weights[0]
+	for i := 1; i < len(weights); i++ {
+			cumulativeWeights[i] = cumulativeWeights[i-1] + weights[i]
+	}
+	r := rand.Float64()
+	for i, cw := range cumulativeWeights {
+			if r < cw {
+					return indices[i]
+			}
+	}
+	return indices[len(indices)-1] // Return the last index if not found earlier
+}
+

@@ -152,7 +152,7 @@ func (p *Posterior) CalcPosterior() []PosteriorResult {
 
 	index := int64(math.Ceil(rand.Float64() * float64(numCombos)))
 
-	numsteps := 200
+	numsteps := 1000
 
 	likelihoods := make([]float64, numsteps+1)
 	indices := make([]int64, numsteps+1)
@@ -164,6 +164,8 @@ func (p *Posterior) CalcPosterior() []PosteriorResult {
 		indices, likelihoods = p.MarkovChain.LatticeRandomWalk(int64(index), numsteps)
 	case "GaussianRandomWalk":
 		indices, likelihoods = p.MarkovChain.GaussianRandomWalk(int64(index), numsteps)
+	case "MetropolisHastings":
+		indices, likelihoods = p.MarkovChain.MetropolisHastings(int64(index), numsteps)
 	}
 
 	// take index, get prior params. take CDF of prior params, multiply by likelihood

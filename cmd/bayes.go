@@ -33,7 +33,7 @@ var bayesCmd = &cobra.Command{
 		priorSigmaParams := src.DistributionParams{
 			Dist: "Exponential",
 			Params: map[string]float64{
-				"Rate": 1,
+				"Rate": 0.5,
 			},
 		}
 
@@ -86,8 +86,8 @@ var bayesCmd = &cobra.Command{
 			Distributions: []src.Distribution{priorMuDist, priorSigmaDist},
 			Grid: 				mat.Dense{},
 			Likelihood: Likelihood,
-			SampleSize: 50,
-			Sampler: "GaussianRandomWalk",
+			SampleSize: 100,
+			Sampler: "MetropolisHastings",
 		}
 
 		// Step 12: Create Posterior
