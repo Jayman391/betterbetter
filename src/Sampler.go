@@ -65,6 +65,23 @@ func ClosestPoint(grid mat.Dense, point []float64) int64 {
 
 }
 
+func RemoveDuplicates(indices []int64, likelihoods []float64) ([]int64, []float64) {
+
+	// if there are duplicate indices, remove the repeated indices and likelihoods
+	for i := 0; i < len(indices); i++ {
+		for j := i + 1; j < len(indices); j++ {
+			if indices[i] == indices[j] {
+				// remove jth element from indices and likelihoods
+				indices = append(indices[:j], indices[j+1:]...)
+				likelihoods = append(likelihoods[:j], likelihoods[j+1:]...)
+			}
+		}
+	}
+
+	return indices, likelihoods
+
+}
+
 func  (m *MarkovChain) GetNeighbors(point int64) []int64 {
 	// Take index of row 
 		// starting with the last column, neighbors are index + 1 and index - 1
@@ -88,6 +105,7 @@ func (m *MarkovChain) UnitRandomWalk(index int64, numsteps int) ([]int64, []floa
 
 	startingIndex := index
 
+
 	point := m.Grid.RawRowView(int(index))
 	m.Likelihood.Params = point  // Fix: Assign the value to a slice of length 1
 	likelihoods[0] = m.Likelihood.CalcLikelihood()
@@ -108,6 +126,8 @@ func (m *MarkovChain) UnitRandomWalk(index int64, numsteps int) ([]int64, []floa
 		m.Likelihood.Params = point // Fix: Assign the value to a slice of length 1
 		likelihoods[i+1] = m.Likelihood.CalcLikelihood()
 	}
+
+	indices, likelihoods = RemoveDuplicates(indices, likelihoods)
 
 	return indices, likelihoods
 

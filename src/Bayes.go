@@ -4,9 +4,8 @@ import (
 	"gonum.org/v1/gonum/mat"
 	"gonum.org/v1/gonum/stat/distuv"
 	"math"
-	"math/rand"
 	"slices"
-	"fmt"
+	//"fmt"
 )
 
 // Distribution interface
@@ -131,19 +130,15 @@ func (l *Likelihood) CalcLikelihood() float64 {
 		for j := 0; j < numCols; j++ {
 			dataPoint := l.Data.At(i, j)
 			cdf := dist.CDF(dataPoint) // Consider using PDF instead
-			if cdf <= 0 {
-				// Handle cases where CDF is zero or negative
-				logLiklihood := math.Inf(-1)
-				fmt.Println("Log likelihood:", logLiklihood)
-			} else {
-				logLiklihood := -math.Log10(cdf)
+			if cdf > 0 {
+				logLiklihood := math.Log10(cdf)
 				logSum += logLiklihood
 			}	
 		}
 	
 	}
 
-	return logSum
+	return -logSum
 }
 
 func (p *Posterior) CalcPosterior() []PosteriorResult {
@@ -154,7 +149,7 @@ func (p *Posterior) CalcPosterior() []PosteriorResult {
 	// generate initial state for the Markov Chain (random row in grid)
 	numCombos := p.MarkovChain.Grid.RawMatrix().Rows
 
-	index := rand.Intn(numCombos)
+	index := numCombos / 2
 
 	numsteps := 200
 
@@ -165,12 +160,30 @@ func (p *Posterior) CalcPosterior() []PosteriorResult {
 		case "UnitRandomWalk":
 			indices, likelihoods = p.MarkovChain.UnitRandomWalk(int64(index), numsteps)
 	}
-	
-	for l := range likelihoods {
-		likelihoods[l] = 1 / likelihoods[l]
+
+	// take index, get prior params. take CDF of prior params, multiply by likelihood
+	    // for prior in priors
+				// take cdf of value at index given prior distribution
+					// multiply by likelihood
+
+	for index := range indices {
+		row := p.MarkovChain.Grid.RawRowView(int(indices[index]))
+		priorprob := 1.0
+		for i, prior := range p.Priors {
+			dist := prior.Distribution
+			cdf := dist.CDF(row[i])
+			priorprob *= cdf
+		}
+		likelihoods[index] *= priorprob
 	}
 
+	// remove the first element of the likelihoods array and indices array
+	likelihoods = likelihoods[1:]
+	indices = indices[1:] 
+
 	likelihoods = Normalize(likelihoods)
+
+	indices, likelihoods = RemoveDuplicates(indices, likelihoods)
 
 	// Collect results
 	results := make([]PosteriorResult, len(indices))

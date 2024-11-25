@@ -24,15 +24,16 @@ var bayesCmd = &cobra.Command{
 		// Step 6: Initialize Priors for Mu and Sigma
 		// Assuming priors for Mu and Sigma are both Normal distributions
 		priorMuParams := src.DistributionParams{
-			Dist: "Exponential",
+			Dist: "Normal",
 			Params: map[string]float64{
-				"Rate": 1.0,
+				"Mu": 0.0,
+				"Sigma": 1.0,
 			},
 		}
 		priorSigmaParams := src.DistributionParams{
 			Dist: "Exponential",
 			Params: map[string]float64{
-				"Rate": 1.0,
+				"Rate": 1,
 			},
 		}
 
