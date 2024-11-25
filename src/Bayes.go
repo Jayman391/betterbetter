@@ -1,10 +1,12 @@
 package src
 
 import (
+	"math"
+	"math/rand"
+	"slices"
+
 	"gonum.org/v1/gonum/mat"
 	"gonum.org/v1/gonum/stat/distuv"
-	"math"
-	"slices"
 	//"fmt"
 )
 
@@ -30,10 +32,10 @@ type Likelihood struct {
 }
 
 type Posterior struct {
-	Priors []Prior
-	Data   mat.Matrix
+	Priors           []Prior
+	Data             mat.Matrix
 	LikelihoodParams DistributionParams
-	MarkovChain 		MarkovChain
+	MarkovChain      MarkovChain
 }
 
 type PosteriorResult struct {
@@ -126,16 +128,16 @@ func (l *Likelihood) CalcLikelihood() float64 {
 	var logSum float64 = 0.0
 	// Calculate log-likelihood for each row
 	for i := 0; i < numRows; i++ {
-		
+
 		for j := 0; j < numCols; j++ {
 			dataPoint := l.Data.At(i, j)
 			cdf := dist.CDF(dataPoint) // Consider using PDF instead
 			if cdf > 0 {
 				logLiklihood := math.Log10(cdf)
 				logSum += logLiklihood
-			}	
+			}
 		}
-	
+
 	}
 
 	return -logSum
@@ -145,45 +147,51 @@ func (p *Posterior) CalcPosterior() []PosteriorResult {
 	// Create the grid
 	p.MarkovChain.CreateGrid()
 
-
 	// generate initial state for the Markov Chain (random row in grid)
 	numCombos := p.MarkovChain.Grid.RawMatrix().Rows
 
-	index := numCombos / 2
+	index := int64(math.Ceil(rand.Float64() * float64(numCombos)))
 
 	numsteps := 200
 
-	likelihoods := make([]float64, numsteps + 1)
-	indices := make([]int64, numsteps + 1)
+	likelihoods := make([]float64, numsteps+1)
+	indices := make([]int64, numsteps+1)
 
 	switch p.MarkovChain.Sampler {
-		case "UnitRandomWalk":
-			indices, likelihoods = p.MarkovChain.UnitRandomWalk(int64(index), numsteps)
+	case "UnitRandomWalk":
+		indices, likelihoods = p.MarkovChain.UnitRandomWalk(int64(index), numsteps)
+	case "LatticeRandomWalk":
+		indices, likelihoods = p.MarkovChain.LatticeRandomWalk(int64(index), numsteps)
+	case "GaussianRandomWalk":
+		indices, likelihoods = p.MarkovChain.GaussianRandomWalk(int64(index), numsteps)
 	}
 
 	// take index, get prior params. take CDF of prior params, multiply by likelihood
-	    // for prior in priors
-				// take cdf of value at index given prior distribution
-					// multiply by likelihood
+	// for prior in priors
+	// take cdf of value at index given prior distribution
+	// multiply by likelihood
+	for i, indice := range indices {
+		if indice < 0 {
+			indices[i] = index
+		}
 
-	for index := range indices {
-		row := p.MarkovChain.Grid.RawRowView(int(indices[index]))
+		row := p.MarkovChain.Grid.RawRowView(int(indices[i]))
 		priorprob := 1.0
 		for i, prior := range p.Priors {
 			dist := prior.Distribution
 			cdf := dist.CDF(row[i])
 			priorprob *= cdf
 		}
-		likelihoods[index] *= priorprob
+		likelihoods[i] *= priorprob
 	}
 
 	// remove the first element of the likelihoods array and indices array
 	likelihoods = likelihoods[1:]
-	indices = indices[1:] 
-
-	likelihoods = Normalize(likelihoods)
+	indices = indices[1:]
 
 	indices, likelihoods = RemoveDuplicates(indices, likelihoods)
+
+	likelihoods = Normalize(likelihoods)
 
 	// Collect results
 	results := make([]PosteriorResult, len(indices))
@@ -196,15 +204,13 @@ func (p *Posterior) CalcPosterior() []PosteriorResult {
 	return results
 }
 
-
-
 type BayesianModel struct {
 	priors     []Prior
 	likelihood Likelihood
 	posterior  Posterior
 }
 
-/// Helper functions
+// / Helper functions
 // Map function for generic slices
 type mapFunc[E any] func(E) E
 

@@ -87,7 +87,7 @@ var bayesCmd = &cobra.Command{
 			Grid: 				mat.Dense{},
 			Likelihood: Likelihood,
 			SampleSize: 50,
-			Sampler: "UnitRandomWalk",
+			Sampler: "GaussianRandomWalk",
 		}
 
 		// Step 12: Create Posterior
