@@ -1,5 +1,3 @@
-// cmd/bayes.go
-
 package cmd
 
 import (
@@ -17,8 +15,8 @@ func init() {
 
 var bayesCmd = &cobra.Command{
 	Use:   "bayes",
-	Short: "Bayesian Network",
-	Long:  `Bayesian Network`,
+	Short: "Bayesian Stats",
+	Long:  `Bayesian Stats`,
 	Run: func(cmd *cobra.Command, args []string) {
 		
 		// Step 6: Initialize Priors for Mu and Sigma
@@ -26,8 +24,8 @@ var bayesCmd = &cobra.Command{
 		priorMuParams := src.DistributionParams{
 			Dist: "Normal",
 			Params: map[string]float64{
-				"Mu": 0.0,
-				"Sigma": 1.0,
+				"Mu": 1.0,
+				"Sigma": 0.5,
 			},
 		}
 		priorSigmaParams := src.DistributionParams{
@@ -47,7 +45,7 @@ var bayesCmd = &cobra.Command{
 		dataparams := src.DistributionParams{
 			Dist: "Normal",
 			Params: map[string]float64{
-				"Mu":    0.0, // Likelihood mean
+				"Mu":    1.0, // Likelihood mean
 				"Sigma": 1.0, // Likelihood standard deviation
 			},
 		}
@@ -86,8 +84,8 @@ var bayesCmd = &cobra.Command{
 			Distributions: []src.Distribution{priorMuDist, priorSigmaDist},
 			Grid: 				mat.Dense{},
 			Likelihood: Likelihood,
-			SampleSize: 100,
-			Sampler: "MetropolisHastings",
+			SampleSize: 20,
+			Sampler: "Metropolis",
 		}
 
 		// Step 12: Create Posterior
@@ -109,5 +107,11 @@ var bayesCmd = &cobra.Command{
 			totalProb += res.Probability
 		}
 		fmt.Println("Total Probability:", totalProb)
+
+		// Sample posterior predictive
+
+		postPred := post.CalcPosteriorPredictive(posteriorResults, 100)
+
+	  fmt.Println("Posterior Predictive Samples: ", postPred)		
 	},
 }

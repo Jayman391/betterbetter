@@ -2,7 +2,11 @@ module betterbetter
 
 go 1.22.2
 
-require github.com/spf13/cobra v1.8.1
+require (
+	github.com/spf13/cobra v1.8.1
+	golang.org/x/text v0.14.0
+	gonum.org/v1/gonum v0.15.1
+)
 
 require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -11,5 +15,4 @@ require (
 	github.com/spatialcurrent/go-math v0.0.0-20211120210754-b3872f7000fe // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa // indirect
-	gonum.org/v1/gonum v0.15.1 // indirect
 )
