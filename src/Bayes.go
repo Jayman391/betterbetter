@@ -43,73 +43,12 @@ type PosteriorResult struct {
 	Probability float64
 }
 
-func (d *DistributionParams) CreateDist() Distribution {
-	switch d.Dist {
-	case "Bernoulli":
-		return distuv.Bernoulli{
-			P: d.Params["P"],
-		}
-	case "Beta":
-		return distuv.Beta{
-			Alpha: d.Params["Alpha"],
-			Beta:  d.Params["Beta"],
-		}
-	case "Binomial":
-		return distuv.Binomial{
-			N: d.Params["N"],
-			P: d.Params["P"],
-		}
-	case "ChiSquared":
-		return distuv.ChiSquared{
-			K: d.Params["K"],
-		}
-	case "Exponential":
-		return distuv.Exponential{
-			Rate: d.Params["Rate"],
-		}
-	case "Gamma":
-		return distuv.Gamma{
-			Alpha: d.Params["Alpha"],
-			Beta:  d.Params["Beta"],
-		}
-	case "LogNormal":
-		return distuv.LogNormal{
-			Mu:    d.Params["Mu"],
-			Sigma: d.Params["Sigma"],
-		}
-	case "Normal":
-		return distuv.Normal{
-			Mu:    d.Params["Mu"],
-			Sigma: d.Params["Sigma"],
-		}
-	case "Pareto":
-		return distuv.Pareto{
-			Xm:    d.Params["Xm"],
-			Alpha: d.Params["Alpha"],
-		}
-	case "Poisson":
-		return distuv.Poisson{
-			Lambda: d.Params["Lambda"],
-		}
-	case "StudentsT":
-		return distuv.StudentsT{
-			Mu:    d.Params["Mu"],
-			Sigma: d.Params["Sigma"],
-			Nu:    d.Params["Nu"],
-		}
-	case "Uniform":
-		return distuv.Uniform{
-			Min: d.Params["Min"],
-			Max: d.Params["Max"],
-		}
-	case "Weibull":
-		return distuv.Weibull{
-			K:      d.Params["K"],
-			Lambda: d.Params["Lambda"],
-		}
-	default:
-		return nil
-	}
+type MarkovChain struct {
+	Distributions []Distribution
+	Grid 				mat.Dense
+	Likelihood Likelihood
+	SampleSize 	int
+	Sampler string
 }
 
 func (l *Likelihood) CalcLikelihood() float64 {
@@ -241,16 +180,6 @@ func (p *Posterior) CalcPosteriorPredictive(results []PosteriorResult, numsample
 	}
 
 	return posteriorSamples
-
-}
-
-
-type MarkovChain struct {
-	Distributions []Distribution
-	Grid 				mat.Dense
-	Likelihood Likelihood
-	SampleSize 	int
-	Sampler string
 }
 
 func (m *MarkovChain) UnitRandomWalk(index int64, numsteps int) ([][]float64, []float64) {
@@ -288,7 +217,6 @@ func (m *MarkovChain) UnitRandomWalk(index int64, numsteps int) ([][]float64, []
 	}
 
 	return samples, likelihoods
-
 }
 
 func (m *MarkovChain) LatticeRandomWalk(index int64, numsteps int) ([][]float64, []float64) {
@@ -358,7 +286,6 @@ func (m *MarkovChain) LatticeRandomWalk(index int64, numsteps int) ([][]float64,
 	}
 
 	return samples, likelihoods
- 
 }
 
 func (m *MarkovChain) GaussianRandomWalk(index int64, numsteps int) ([][]float64, []float64) {
@@ -441,7 +368,6 @@ func (m *MarkovChain) GaussianRandomWalk(index int64, numsteps int) ([][]float64
 	}
 
 	return fullsamples, likelihoods
-
 }
 
 func (m *MarkovChain) MetropolisHastings(index int64, numsteps int) ([][]float64, []float64) {
@@ -621,6 +547,74 @@ func (m *MarkovChain) CreateGrid()  {
 
 	m.Grid = *matrix
 }
+func (d *DistributionParams) CreateDist() Distribution {
+	switch d.Dist {
+	case "Bernoulli":
+		return distuv.Bernoulli{
+			P: d.Params["P"],
+		}
+	case "Beta":
+		return distuv.Beta{
+			Alpha: d.Params["Alpha"],
+			Beta:  d.Params["Beta"],
+		}
+	case "Binomial":
+		return distuv.Binomial{
+			N: d.Params["N"],
+			P: d.Params["P"],
+		}
+	case "ChiSquared":
+		return distuv.ChiSquared{
+			K: d.Params["K"],
+		}
+	case "Exponential":
+		return distuv.Exponential{
+			Rate: d.Params["Rate"],
+		}
+	case "Gamma":
+		return distuv.Gamma{
+			Alpha: d.Params["Alpha"],
+			Beta:  d.Params["Beta"],
+		}
+	case "LogNormal":
+		return distuv.LogNormal{
+			Mu:    d.Params["Mu"],
+			Sigma: d.Params["Sigma"],
+		}
+	case "Normal":
+		return distuv.Normal{
+			Mu:    d.Params["Mu"],
+			Sigma: d.Params["Sigma"],
+		}
+	case "Pareto":
+		return distuv.Pareto{
+			Xm:    d.Params["Xm"],
+			Alpha: d.Params["Alpha"],
+		}
+	case "Poisson":
+		return distuv.Poisson{
+			Lambda: d.Params["Lambda"],
+		}
+	case "StudentsT":
+		return distuv.StudentsT{
+			Mu:    d.Params["Mu"],
+			Sigma: d.Params["Sigma"],
+			Nu:    d.Params["Nu"],
+		}
+	case "Uniform":
+		return distuv.Uniform{
+			Min: d.Params["Min"],
+			Max: d.Params["Max"],
+		}
+	case "Weibull":
+		return distuv.Weibull{
+			K:      d.Params["K"],
+			Lambda: d.Params["Lambda"],
+		}
+	default:
+		return nil
+	}
+}
 func (m *MarkovChain) GetNeighbors(index int64) []int64 {
 	neighbors := []int64{}
 
@@ -690,7 +684,6 @@ func weightedSample(indices []int64, weights []float64) int64 {
 	}
 	return indices[len(indices)-1] // Return the last index if not found earlier
 }
-// gradient approximates the gradient of function f at point x using finite differences.
 func gradient(f func([]float64) float64, x []float64) []float64 {
 	grad := make([]float64, len(x))
 	epsilon := 1e-5
@@ -741,24 +734,17 @@ func hamiltonian(q []float64, p []float64, negativeLogProb func([]float64) float
 	potentialEnergy := negativeLogProb(q)
 	return potentialEnergy + kineticEnergy
 }
-// NegativeLogProb computes the negative log probability given parameters q.
 func (l *Likelihood) NegativeLogProb(q []float64) float64 {
 	// Update l.Params with q
 	copy(l.Params, q)
 	return l.CalcLikelihood() // Assuming CalcLikelihood returns negative log-likelihood
 }
-
-
 type BayesianModel struct {
 	priors     []Prior
 	likelihood Likelihood
 	posterior  Posterior
 }
-
-// / Helper functions
-// Map function for generic slices
 type mapFunc[E any] func(E) E
-
 func Map[S ~[]E, E any](s S, f mapFunc[E]) S {
 	result := make(S, len(s))
 	for i := range s {
@@ -766,7 +752,6 @@ func Map[S ~[]E, E any](s S, f mapFunc[E]) S {
 	}
 	return result
 }
-
 func SampleDist(dist Distribution, num_samples int) []float64 {
 	if dist == nil {
 		return nil
@@ -780,7 +765,6 @@ func SampleDist(dist Distribution, num_samples int) []float64 {
 
 	return samples
 }
-
 func getParamKeys(distType string) []string {
 	switch distType {
 	case "Normal":
@@ -813,7 +797,6 @@ func getParamKeys(distType string) []string {
 		return nil
 	}
 }
-
 func Combination(current [][]float64, next []float64) [][]float64 {
 	var result [][]float64
 	for _, c := range current {
@@ -824,7 +807,6 @@ func Combination(current [][]float64, next []float64) [][]float64 {
 	}
 	return result
 }
-
 func Sum(data []float64) float64 {
 	var total float64
 	for _, val := range data {
@@ -832,7 +814,6 @@ func Sum(data []float64) float64 {
 	}
 	return total
 }
-
 func Normalize(data []float64) []float64 {
 	sum := Sum(data)
 	for i, val := range data {

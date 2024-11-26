@@ -19,7 +19,7 @@ var bayesCmd = &cobra.Command{
 	Long:  `Bayesian Stats`,
 	Run: func(cmd *cobra.Command, args []string) {
 		
-		// Step 6: Initialize Priors for Mu and Sigma
+		// Initialize Priors for Mu and Sigma
 		// Assuming priors for Mu and Sigma are both Normal distributions
 		priorMuParams := src.DistributionParams{
 			Dist: "Normal",
@@ -35,13 +35,13 @@ var bayesCmd = &cobra.Command{
 			},
 		}
 
-		// Step 7: Create Prior Distributions
+		// Create Prior Distributions
 		priorMuDist := priorMuParams.CreateDist()
 		
 		priorSigmaDist := priorSigmaParams.CreateDist()
 	
 
-		// Step 8: generate Fake Data
+		// generate Fake Data
 		dataparams := src.DistributionParams{
 			Dist: "Normal",
 			Params: map[string]float64{
@@ -56,14 +56,14 @@ var bayesCmd = &cobra.Command{
 
 		datamatrix := mat.NewDense(len(data), 1, data)
 
-		// Step 9: Define Priors
+		// Define Priors
 		priorObjMu := src.Prior{Distribution: priorMuDist}
 		priorObjSigma := src.Prior{Distribution: priorSigmaDist}
 		priors := []src.Prior{priorObjMu, priorObjSigma}
 
 		
 
-		// Step 10: Create Likelihood
+		// Create Likelihood
 
 		LikelihoodParams := src.DistributionParams{
 			Dist: "Normal",
@@ -79,7 +79,7 @@ var bayesCmd = &cobra.Command{
 			Data: datamatrix,
 		}
 
-		// Step 11: Create Markov Chain
+		// Create Markov Chain
 		mc := src.MarkovChain{
 			Distributions: []src.Distribution{priorMuDist, priorSigmaDist},
 			Grid: 				mat.Dense{},
@@ -88,7 +88,7 @@ var bayesCmd = &cobra.Command{
 			Sampler: "Metropolis",
 		}
 
-		// Step 12: Create Posterior
+		// Create Posterior
 
 		post := src.Posterior{
 			Priors: priors,
