@@ -120,7 +120,7 @@ func FetchGames(date string, sport string) string {
 
 }
 
-func FetchOdds(date string, sport string, id string) any {
+func FetchOdds(date string, sport string, id string) string {
 	url := ""
 
 	if sport == "nba" {

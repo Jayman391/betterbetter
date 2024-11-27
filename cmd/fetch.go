@@ -38,7 +38,6 @@ func init() {
 	FetchDataCmd.Flags().StringVarP(&Year, "year", "y", "", "Year to fetch data for")
 
 	FetchOddsCmd.Flags().StringVarP(&Sport, "sport", "s", "", "Sport to fetch odds for")
-	FetchOddsCmd.Flags().StringSliceVarP(&Teams, "teams", "t", []string{}, "teams to fetch data for")
 	FetchOddsCmd.Flags().StringVarP(&Year, "date", "d", "", "YYYY-MM-DD date to fetch odds for")
 
 
@@ -331,57 +330,22 @@ var FetchOddsCmd = &cobra.Command{
 			if !ok {
 					fmt.Println("Invalid or missing game data")
 					return
-			}
+			}	
 
-
-			// Retrieve and process the "teams" flag
-			teamsFlag := cmd.Flag("teams").Value.String()
-			if teamsFlag == "" {
-					fmt.Println("Error: Teams flag is required")
+			for _, game := range gamesInterface {
+				gameMap, ok := game.(map[string]interface{})
+				if !ok {
+					fmt.Println("Invalid game data")
 					return
-			}
+				}
 
-			teams := strings.Split(teamsFlag, ",")
-			teams = Map(teams, TrimBracket) // Ensure Map and TrimBracket are defined
-
-			// Initialize a slice to hold filtered games
-			filteredGames := []map[string]interface{}{}
-
-			// Iterate over each game
-			for _, gameInterface := range gamesInterface {
-					game, ok := gameInterface.(map[string]interface{})
-					if !ok {
-							fmt.Println("Invalid game object format")
-							continue
-					}
-
-					// Extract home and away teams
-					homeTeam, homeOk := game["home_team"].(string)
-					awayTeam, awayOk := game["away_team"].(string)
-					if !homeOk || !awayOk {
-							fmt.Println("Missing team information in game data")
-							continue
-					}
-
-					// Check if either team matches any of the specified teams
-					for _, team := range teams {
-							if strings.Contains(homeTeam, team) || strings.Contains(awayTeam, team) {
-									filteredGames = append(filteredGames, game)
-									break // Avoid duplicate entries if multiple teams match
-							}
-					}
-			}
-
-			// Print the filtered games
-
-			for _, game := range filteredGames {
-				odds := src.FetchOdds(formattedDate, sport, game["id"].(string))
-				parsedOdds := src.ParseData(odds.(string))	
-				err := src.SaveToFile(parsedOdds, fmt.Sprintf("data/%s/%s/%s/%s",sport,dateArr[0], date, game["away_team"].(string) + "_" + game["home_team"].(string)), "odds.json")
+				odds := src.FetchOdds(formattedDate, sport, gameMap["id"].(string))
+				parsedOdds := src.ParseData(odds)
+				err := src.SaveToFile(parsedOdds, fmt.Sprintf("data/%s/%s/%s/%s", sport, dateArr[0], date, gameMap["away_team"].(string)+"_"+gameMap["home_team"].(string)), "odds.json")
 				if err != nil {
 					fmt.Printf("Error saving odds data: %v\n", err)
 					return
-				}	
+				}
 			}
 	},
 }
