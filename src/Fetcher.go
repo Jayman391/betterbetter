@@ -31,6 +31,7 @@ func FetchData(sport string, requestType string, args map[string]string) string 
 		url = url + "/games?"
 	}
 
+
 	fmt.Println(url)
 
 	if len(args) == 0 {
@@ -120,7 +121,7 @@ func FetchGames(date string, sport string) string {
 
 }
 
-func FetchOdds(date string, sport string, id string) any {
+func FetchOdds(date string, sport string, id string) string {
 	url := ""
 
 	if sport == "nba" {
