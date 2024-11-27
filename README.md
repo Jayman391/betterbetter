@@ -26,28 +26,18 @@ set risk reward ratio
 create parlays via combinations of bets
   calculate differentials on parlays
     universe includes individual bets and parlays all with expected values
-
-'''
-betterbetter makebets -r
-'''
-
 use differentials and expected values for each bet in universe
 run optimization routine to maximize expected value given risk/reward constraint
   make (multiple) sets of bets that satisfy the constraints
 
 '''
-betterbetter optimize
-''''
+betterbetter makebets -r
+'''
+
 
 backtest each set of bets and calculate expected profit
 calculate average % profit for risk reward scheme
-
-'''
-betterbetter backtest
-''''
-
 make betslips for new games
-
 '''
 betterbetter predict
 '''
@@ -60,8 +50,6 @@ betterbetter fetchodds -s "" -d "YYYY-MM-DD"
 betterbetter model
 betterbetter arbitrage
 betterbetter makebets -r ""
-betterbetter optimize
-betterbetter backtest
 betterbetter predict
 '''
 
