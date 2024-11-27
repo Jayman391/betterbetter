@@ -3,6 +3,7 @@ package src
 import (
 	"fmt"
 	"io"
+	"io"
 	"net/http"
 )
 
@@ -25,8 +26,11 @@ func FetchData(sport string, requestType string, args map[string]string) string 
 		url = url + "/players?"
 	}
 	if requestType == "team-stats" || requestType == "player-stats" {
+	if requestType == "team-stats" || requestType == "player-stats" {
 		url = url + "/players/statistics?"
 	}
+	if requestType == "game"{
+		url = url + "/games?"
 	if requestType == "game"{
 		url = url + "/games?"
 	}
