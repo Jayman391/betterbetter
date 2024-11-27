@@ -4,12 +4,12 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
-	"strconv"
-	"strings"
 	"path/filepath"
 	"slices"
-	"math"
+	"strconv"
+	"strings"
 )
 
 
@@ -424,7 +424,8 @@ func Arbitrage(statspath string, oddspath string) []ArbitrageResult {
 				// calculate differential
 				// return expected value and differential
 
-		fmt.Println(results)
+		SaveToFile(results, oddspath, "arbitrage.json")
+
 		return results
 }
 

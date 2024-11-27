@@ -1,57 +1,67 @@
-# BetterBetter Sports Betting Prediction Pipeline
+### flow of project
 
-This repository provides a pipeline for fetching, modeling, optimizing bets, and backtesting sports betting strategies using team and player statistics. It is tailored for basketball data, specifically the NBA, and uses models such as Bayesian Autoregressive and Energy models.
+scrape player and team data
+scrape player and team odds
 
-## Prerequisites
+'''
+betterbetter fetchdata -s -t -p -y
+betterbetter fetchodds -s -d
+'''
 
-Ensure that you have the required dependencies installed:
+build regression model and forecast probability distributions of metrics for each team and player
+compare predicted probabilities to odds probabilities
 
-1. **Go**: Install Go programming language and set up the Go environment.
-2. **betterbetter**: A custom CLI tool used for fetching data, generating predictions, optimizing bets, and backtesting.
+'''
+betterbetter model
+'''
 
-### Setup
+calculate differentials between predicted and actual
+average differentials across sportsbooks
 
-To set up the environment:
+'''
+betterbetter arbitrage
+'''
 
-```bash
-export PATH=$PATH:~/go/bin
-go install
-```
+set risk reward ratio
+create parlays via combinations of bets
+  calculate differentials on parlays
+    universe includes individual bets and parlays all with expected values
 
-## Fetching Data
-### Fetch Player and Team Statistics
-#### Fetch statistics for the specified teams and season year:
+'''
+betterbetter makebets -r
+'''
 
-```
-betterbetter fetchdata -s nba -t celtics,lakers -y 2023
-```
+use differentials and expected values for each bet in universe
+run optimization routine to maximize expected value given risk/reward constraint
+  make (multiple) sets of bets that satisfy the constraints
 
-### Fetch Odds for Each Game
-#### Fetch odds for each game of the specified teams and season:
+'''
+betterbetter optimize
+''''
 
-```
-betterbetter fetchodds -s nba -t celtics,lakers -d date
-```
+backtest each set of bets and calculate expected profit
+calculate average % profit for risk reward scheme
 
-## Modeling
-
-```
-betterbetter makepredictions 
-```
-
--b flag for bayesian modeling
--e flag for energy based modeling
-
-## Betslip Optimization
-### MaxiMax problem 
-Want to maximize profit & arbitrage opportunity
-
-```
-betterbetter optimizebets
-```
-
-## Backtesting
-
-```
+'''
 betterbetter backtest
-```
+''''
+
+make betslips for new games
+
+'''
+betterbetter predict
+'''
+
+# in run_pipeline.sh
+
+'''
+betterbetter fetchdata -s "" -t ",,," -p ",,," -y "YYYY"
+betterbetter fetchodds -s "" -d "YYYY-MM-DD"
+betterbetter model
+betterbetter arbitrage
+betterbetter makebets -r ""
+betterbetter optimize
+betterbetter backtest
+betterbetter predict
+'''
+
