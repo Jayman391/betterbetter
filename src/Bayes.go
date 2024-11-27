@@ -739,11 +739,13 @@ func (l *Likelihood) NegativeLogProb(q []float64) float64 {
 	copy(l.Params, q)
 	return l.CalcLikelihood() // Assuming CalcLikelihood returns negative log-likelihood
 }
+
 type BayesianModel struct {
 	priors     []Prior
 	likelihood Likelihood
 	posterior  Posterior
 }
+
 type mapFunc[E any] func(E) E
 func Map[S ~[]E, E any](s S, f mapFunc[E]) S {
 	result := make(S, len(s))

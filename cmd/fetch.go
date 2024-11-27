@@ -2,19 +2,12 @@ package cmd
 
 import (
 	"betterbetter/src"
-
-	"fmt"
 	"fmt"
 	"os"
+	"github.com/spf13/cobra"
 	"strings"
 	"strconv"
 	"time"
-
-	"github.com/spf13/cobra"
-	"strconv"
-	"time"
-
-	"github.com/spf13/cobra"
 )
 
 type mapFunc[E any] func(E) E
@@ -54,8 +47,6 @@ func init() {
 	rootCmd.AddCommand(FetchOddsCmd)
 }
 
-var FetchDataCmd = &cobra.Command{
-	Use:   "fetchdata",
 var FetchDataCmd = &cobra.Command{
 	Use:   "fetchdata",
 	Short: "Fetch sports data",
@@ -179,7 +170,6 @@ var FetchDataCmd = &cobra.Command{
 					return
 				}
 				err = src.SaveToFile(statsParsed, fmt.Sprintf("data/%s/%s/%s",sport, year, string(team)), "team_stats.json")
-				err = src.SaveToFile(statsParsed, fmt.Sprintf("data/%s/%s/%s",sport, year, string(team)), "team_stats.json")
 				if err != nil {
 					fmt.Printf("Error saving team stats: %v\n", err)
 					return
@@ -203,25 +193,7 @@ var FetchDataCmd = &cobra.Command{
 					fmt.Printf("Error saving games: %v\n", err)
 					return
 				}
-				fmt.Println("Games saved successfully.")
-
-				Games := src.FetchData(sport, "game", statsParams)
-				if Games == "" {
-					fmt.Println("No games data found")
-					return
-				}
-
-				// Save the stats data to a JSON file
-				gamesParsed := src.ParseData(Games)
-				if gamesParsed == nil {
-					fmt.Println("Error parsing games data")
-					return
-				}
-				err = src.SaveToFile(gamesParsed, fmt.Sprintf("data/%s/%s/%s",sport, year, string(team)), "games.json")
-				if err != nil {
-					fmt.Printf("Error saving games: %v\n", err)
-					return
-				}
+				
 				fmt.Println("Games saved successfully.")
 			}
 		}
@@ -251,12 +223,9 @@ var FetchDataCmd = &cobra.Command{
 					return
 				}
 
-							
 
 				err := src.SaveToFile(parsed_data, fmt.Sprintf("data/%s/%s/%s",sport, year, string(player)), "player_data.json")
 							
-
-				err := src.SaveToFile(parsed_data, fmt.Sprintf("data/%s/%s/%s",sport, year, string(player)), "player_data.json")
 				if err != nil {
 					fmt.Printf("Error saving player data: %v\n", err)
 					return
@@ -300,7 +269,6 @@ var FetchDataCmd = &cobra.Command{
 					fmt.Println("Error parsing stats data")
 					return
 				}
-				err = src.SaveToFile(statsParsed, fmt.Sprintf("data/%s/%s/%s",sport, year, string(player)), "player_stats.json")
 				err = src.SaveToFile(statsParsed, fmt.Sprintf("data/%s/%s/%s",sport, year, string(player)), "player_stats.json")
 				if err != nil {
 					fmt.Printf("Error saving player stats: %v\n", err)

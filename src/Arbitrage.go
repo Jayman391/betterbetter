@@ -439,7 +439,7 @@ func SearchPlayerOdds(m []map[string]any, val string) []map[string]any {
 	return odds
 }
 
-func Sum(x []int64) int64 {
+func IntSum(x []int64) int64 {
 	var sum int64
 	for _, v := range x {
 		sum += v
@@ -461,7 +461,7 @@ func CombinationSum(x []int64, y []int64) []int64 {
     if end > len(x) {
         end = len(x) // Ensure you don't exceed the slice length
     }
-    xaug = append(xaug, Sum(x[i:end])/int64(end-i)) // Use actual length of the slice for averaging
+    xaug = append(xaug, IntSum(x[i:end])/int64(end-i)) // Use actual length of the slice for averaging
 	}
 
 	for i := 0; i < len(y); i += 5000 {
@@ -469,7 +469,7 @@ func CombinationSum(x []int64, y []int64) []int64 {
 			if end > len(y) {
 					end = len(y) // Ensure you don't exceed the slice length
 			}
-			yaug = append(yaug, Sum(y[i:end])/int64(end-i)) // Use actual length of the slice for averaging
+			yaug = append(yaug, IntSum(y[i:end])/int64(end-i)) // Use actual length of the slice for averaging
 	}
 
 	var z []int64
