@@ -7,7 +7,7 @@ import (
 
 	"gonum.org/v1/gonum/mat"
 	"gonum.org/v1/gonum/stat/distuv"
-	"fmt"
+	//"fmt"
 )
 
 // Distribution interface
@@ -28,12 +28,13 @@ type Prior struct {
 type Likelihood struct {
 	Params             []float64
 	DistributionParams DistributionParams
-	Data               mat.Matrix
+	Data               mat.Dense
+	Link func ([]float64, []float64) 	   []float64 
 }
 
 type Posterior struct {
 	Priors           []Prior
-	Data             mat.Matrix
+	Data             mat.Dense
 	LikelihoodParams DistributionParams
 	MarkovChain      MarkovChain
 }
@@ -57,16 +58,20 @@ func (l *Likelihood) CalcLikelihood() float64 {
 	// Get the ordered list of parameter keys for the distribution
 	paramKeys := getParamKeys(l.DistributionParams.Dist)
 
-	// Map the slice values to the Params map
-	for i, key := range paramKeys {
-		l.DistributionParams.Params[key] = l.Params[i]
-	}
-	// Create the distribution
-	dist := l.DistributionParams.CreateDist()
 
 	var logSum float64 = 0.0
 	// Calculate log-likelihood for each row
 	for i := 0; i < numRows; i++ {
+		// Get the row of data
+		row := l.Data.RawRowView(i)
+		//link params to dist params
+		params := l.Link(l.Params, row)
+		// Map the slice values to the Params map
+		for k, key := range paramKeys {
+			l.DistributionParams.Params[key] = params[k]
+		}
+		// Create the distribution
+		dist := l.DistributionParams.CreateDist()
 
 		for j := 0; j < numCols; j++ {
 			dataPoint := l.Data.At(i, j)
@@ -91,7 +96,7 @@ func (p *Posterior) CalcPosterior() []PosteriorResult {
 
 	index := int64(math.Ceil(rand.Float64() * float64(numCombos)))
 
-	numsteps := 1000
+	numsteps := 5000
 
 	likelihoods := make([]float64, numsteps+1)
 	samples := make([][]float64, numsteps+1)
@@ -362,7 +367,6 @@ func (m *MarkovChain) GaussianRandomWalk(index int64, numsteps int) ([][]float64
 		index = samples[neighborIndex]
 
 		indices[i+1] = index
-		fmt.Println(index)
 		fullsamples[i+1] = m.Grid.RawRowView(int(math.Abs(float64(index)) + 1) % m.Grid.RawMatrix().Rows)
 		likelihoods[i+1] = neighborLL
 	}
