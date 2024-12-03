@@ -22,6 +22,7 @@ type Bet struct {
 }
 
 func MakeBets(rr float64, maxbets int) []map[string]interface{} {
+	rr += 1.0
 	arbs := LoadData()
 
 	// Initialize a slice to store Bet structs
