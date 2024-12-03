@@ -57,8 +57,6 @@ func MakeBets(rr float64, maxbets int) []map[string]interface{} {
 			betKeys := make(map[string]bool)        // To store unique bets
 			conflictKeys := make(map[string]string) // To detect over/under conflicts
 
-			comboBetKeys := []string{} // To store bet keys for generating combo key
-
 			// Calculate EV, bookProbs, and modelProbs for each combination
 			for _, i := range combo {
 				if arblist[i] != nil {
@@ -78,7 +76,6 @@ func MakeBets(rr float64, maxbets int) []map[string]interface{} {
 					}
 					// Add betKey to the set
 					betKeys[betKey] = true
-					comboBetKeys = append(comboBetKeys, betKey) // Collect bet keys for combo key
 
 					// Get 'name' field (Over or Under)
 					side, ok := betData["name"].(string)
