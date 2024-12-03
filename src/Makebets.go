@@ -46,15 +46,33 @@ func MakeBets(rr float64, maxbets int) map[string]interface{} {
 		}
 
 		// Iterate through each combination and calculate profits
+	outerLoop:
 		for _, combo := range betCombos {
 			EV := 1.0
 			bookProbs := 1.0
 			modelProbs := 1.0
 
 			actualBets := make([]map[string]interface{}, 0)
+			betKeys := make(map[string]bool) // To store unique bets
+
 			// Calculate EV, bookProbs, and modelProbs for each combination
 			for _, i := range combo {
 				if arblist[i] != nil {
+					// Extract 'Bet' field
+					betData, ok := arblist[i]["Bet"].(map[string]interface{})
+					if !ok {
+						continue outerLoop
+					}
+					// Generate a unique key for the bet
+					betKey := generateBetKey(betData)
+					// Check if bet is already in the set
+					if betKeys[betKey] {
+						// Duplicate bet found, skip this combination
+						continue outerLoop
+					}
+					// Add betKey to the set
+					betKeys[betKey] = true
+
 					if expectedValue, ok := arblist[i]["ExpectedValue"].(float64); ok {
 						EV *= expectedValue
 					}
@@ -147,6 +165,22 @@ func MakeBets(rr float64, maxbets int) map[string]interface{} {
 
 	// Return the selected bets
 	return selectedBets
+}
+
+// Function to generate a unique key for each bet
+func generateBetKey(betData map[string]interface{}) string {
+	// Extract fields that uniquely define a bet
+	awayTeam := fmt.Sprintf("%v", betData["away_team"])
+	homeTeam := fmt.Sprintf("%v", betData["home_team"])
+	name := fmt.Sprintf("%v", betData["name"])
+	point := fmt.Sprintf("%v", betData["point"])
+	time := fmt.Sprintf("%v", betData["time"])
+	betType := fmt.Sprintf("%v", betData["type"])
+	description := fmt.Sprintf("%v", betData["description"])
+
+	// Combine them into a unique key
+	key := fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s", awayTeam, homeTeam, name, point, time, betType, description)
+	return key
 }
 
 func LoadData() map[string]interface{} {
