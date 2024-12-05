@@ -34,11 +34,7 @@ func init() {
 	FetchDataCmd.Flags().StringSliceVarP(&Players, "players", "p", []string{}, "players to fetch data for")
 	FetchDataCmd.Flags().StringSliceVarP(&Teams, "teams", "t", []string{}, "teams to fetch data for")
 	FetchDataCmd.Flags().StringVarP(&Year, "year", "y", "", "Year to fetch data for")
-	FetchDataCmd.Flags().StringVarP(&Sport, "sport", "s", "", "Sport to fetch data for")
-	FetchDataCmd.Flags().StringSliceVarP(&Players, "players", "p", []string{}, "players to fetch data for")
-	FetchDataCmd.Flags().StringSliceVarP(&Teams, "teams", "t", []string{}, "teams to fetch data for")
-	FetchDataCmd.Flags().StringVarP(&Year, "year", "y", "", "Year to fetch data for")
-
+	
 	FetchOddsCmd.Flags().StringVarP(&Sport, "sport", "s", "", "Sport to fetch odds for")
 	FetchOddsCmd.Flags().StringVarP(&Year, "date", "d", "", "YYYY-MM-DD date to fetch odds for")
 
