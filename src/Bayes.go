@@ -1,5 +1,4 @@
 package src
-
 import (
 	"math"
 	"math/rand"
@@ -16,8 +15,19 @@ type Distribution interface {
 	CDF(float64) float64
 }
 
+type ContinuousDistribution interface {
+	Distribution
+	Quantile(float64) float64
+}
+
+type DiscreteDistribution interface {
+	Distribution
+	Prob(float64) float64
+}
+
 type DistributionParams struct {
 	Dist   string
+	DistType string
 	Params map[string]float64
 }
 
@@ -28,12 +38,13 @@ type Prior struct {
 type Likelihood struct {
 	Params             []float64
 	DistributionParams DistributionParams
-	Data               mat.Dense
-	Link func ([]float64, []float64) 	   []float64 
+	InputData               mat.Dense
+	OutputData              mat.VecDense
+	Link               func([]float64 , []float64) []float64
 }
 
 type Posterior struct {
-	Priors           []Prior
+	Priors           []DistributionParams
 	Data             mat.Dense
 	LikelihoodParams DistributionParams
 	MarkovChain      MarkovChain
@@ -41,50 +52,91 @@ type Posterior struct {
 
 type PosteriorResult struct {
 	Params      []float64
-	Probability float64
+	LogLikelihood float64
 }
 
 type MarkovChain struct {
-	Distributions []Distribution
-	Grid 				mat.Dense
-	Likelihood Likelihood
-	SampleSize 	int
-	Sampler string
+	Distributions []DistributionParams
+	Grid          mat.Dense
+	Likelihood    Likelihood
+	SampleSize    int
+	Sampler       string
 }
 
-func (l *Likelihood) CalcLikelihood() float64 {
-	numRows, numCols := l.Data.Dims()
+func (l *Likelihood) CalcDataLikelihood() float64 {
+	NegLogLikelihood := 0.0
+	distType := l.DistributionParams.Dist
 
-	// Get the ordered list of parameter keys for the distribution
-	paramKeys := getParamKeys(l.DistributionParams.Dist)
+	for i := range l.InputData.RawMatrix().Rows {
 
-
-	var logSum float64 = 0.0
-	// Calculate log-likelihood for each row
-	for i := 0; i < numRows; i++ {
-		// Get the row of data
-		row := l.Data.RawRowView(i)
-		//link params to dist params
-		params := l.Link(l.Params, row)
-		// Map the slice values to the Params map
-		for k, key := range paramKeys {
-			l.DistributionParams.Params[key] = params[k]
+		inputdata := make([]float64, l.InputData.RawMatrix().Cols)
+		for j := range inputdata {
+			inputdata[j] = l.InputData.At(i, j)
 		}
-		// Create the distribution
-		dist := l.DistributionParams.CreateDist()
-
-		for j := 0; j < numCols; j++ {
-			dataPoint := l.Data.At(i, j)
-			cdf := dist.CDF(dataPoint) // Consider using PDF instead
-			if cdf > 0 {
-				logLiklihood := -math.Log10(cdf)
-				logSum += logLiklihood
-			}
+		//fmt.Println(data)
+		//fmt.Println(l.Params)
+		selectedParams := l.Link(l.Params, inputdata)
+		paramKeys := getParamKeys(distType)
+		for i, key := range paramKeys {
+			l.DistributionParams.Params[key] = selectedParams[i]
 		}
 
+		outputdata := make([]float64, l.OutputData.Len())
+
+		for j := 0; j < l.OutputData.Len(); j++ {
+			outputdata[j] = l.OutputData.At(j,0)
+		}
+
+		//fmt.Println(l.DistributionParams.Params)
+
+		switch distType {
+			case "Normal":
+				mu := l.DistributionParams.Params["Mu"]
+				sigma := l.DistributionParams.Params["Sigma"]
+				NegLogLikelihood += -UVNormalLogLikelihood(mu, sigma, outputdata)
+			case "Poisson":
+				lambda := l.DistributionParams.Params["Lambda"]
+				NegLogLikelihood += -UVPoissonLogLikelihood(lambda, outputdata)
+			case "Exponential":
+				rate := l.DistributionParams.Params["Rate"]
+				NegLogLikelihood += -UVExponentialLogLikelihood(rate, outputdata)
+			case "Uniform":
+				min := l.DistributionParams.Params["Min"]
+				max := l.DistributionParams.Params["Max"]
+				n := float64(len(outputdata))
+				NegLogLikelihood += -UVUniformLogLikelihood(min, max, n)
+		}
+}
+
+	return NegLogLikelihood
+}
+
+func UVNormalLogLikelihood(mu float64, sigma float64, data []float64) float64 {
+	sum := -float64(len(data)) / 2.0 * math.Log(2*math.Pi*math.Pow(sigma, 2))
+	for _, d := range data {
+		sum -= (1.0 / 2.0 * math.Pow(sigma, 2)) * math.Pow((d-mu), 2)
 	}
+	return sum
+}
 
-	return logSum
+func UVPoissonLogLikelihood(lambda float64, data []float64) float64 {
+	sum := -float64(len(data)) * lambda
+	for _, d := range data {
+		sum += d*math.Log(lambda) - math.Log(math.Gamma(d+1))
+	}
+	return sum
+}
+
+func UVExponentialLogLikelihood(rate float64, data []float64) float64 {
+	sum := (float64(len(data))) * math.Log(rate)
+	for _, d := range data {
+		sum -= rate * d
+	}
+	return sum
+}
+
+func UVUniformLogLikelihood(min float64, max float64, n float64) float64 {
+	return -n * math.Log(max-min)
 }
 
 func (p *Posterior) CalcPosterior() []PosteriorResult {
@@ -109,7 +161,7 @@ func (p *Posterior) CalcPosterior() []PosteriorResult {
 	case "Gaussian":
 		samples, likelihoods = p.MarkovChain.GaussianRandomWalk(int64(index), numsteps)
 	case "Metropolis":
-		samples, likelihoods = p.MarkovChain.MetropolisHastings(int64(index), numsteps)
+		samples, likelihoods = p.MarkovChain.MetropolisHastings(int64(index), int(float64(numsteps) * 1.5), int(float64(numsteps)/2.0) )
 	case "Hamiltonian":
 		samples, likelihoods = p.MarkovChain.HamiltonianMonteCarlo(int64(index), numsteps)
 	}
@@ -119,89 +171,121 @@ func (p *Posterior) CalcPosterior() []PosteriorResult {
 	// take cdf of value at index given prior distribution
 	// multiply by likelihood
 	for i, sample := range samples {
-		priorprob := 1.0
-		for j, prior := range p.Priors {
-			dist := prior.Distribution
-			cdf := dist.CDF(sample[j])
-			priorprob *= cdf
+		NegLogLikelihood := 0.0
+		data := sample
+		index := 0
+		for _, prior := range p.Priors {
+			distType := prior.Dist
+			switch distType {
+			case "Normal":
+				mu := prior.Params["Mu"]
+				sigma := prior.Params["Sigma"]
+				NegLogLikelihood -= UVNormalLogLikelihood(mu, sigma, []float64{data[index]})
+				index += 1
+			case "Poisson":
+				lambda := prior.Params["Lambda"]
+				NegLogLikelihood -= UVPoissonLogLikelihood(lambda, []float64{data[index]})
+				index += 1
+			case "Exponential":
+				rate := prior.Params["Rate"]
+				NegLogLikelihood -= UVExponentialLogLikelihood(rate, []float64{data[index]})
+				index += 1
+			case "Uniform":
+				min := prior.Params["Min"]
+				max := prior.Params["Max"]
+				NegLogLikelihood -= UVUniformLogLikelihood(min, max, float64(len(samples)))
+				index += 1
+			}
 		}
-		likelihoods[i] -= math.Log10(priorprob)
+		likelihoods[i] += NegLogLikelihood
 	}
 
 	// remove the first element of the likelihoods array and indices array
 	samples = samples[1:]
-	likelihoods = likelihoods[1:]	
-
-
-	likelihoods = Normalize(likelihoods)
-
+	likelihoods = likelihoods[1:]
 
 	// Collect results
 	results := make([]PosteriorResult, len(samples))
 	for i, sample := range samples {
 		results[i] = PosteriorResult{
-			Params:     sample,
-			Probability: likelihoods[i],
+			Params:      sample,
+			LogLikelihood: likelihoods[i],
 		}
 	}
 	return results
 }
 
-func (p *Posterior) CalcPosteriorPredictive(results []PosteriorResult, numsamples int) [][]float64 {
-   //weights correspond to likelihoods
-	 // for num samples, weighted randomly select a result based on likelihood	
-	 		// for each result, sample a data point from the likelihood distribution using the result's parameters as priors
-		// return the samples
-	posteriorSamples := make([][]float64, numsamples)
-	weights := make([]float64, len(results))
-	posteriorIndices := make([]int64, len(results)) 
+func linkFunc(point []float64, data []float64) []float64 {
+	lambda := 0.0
+	//fmt.Println(point)
+	//fmt.Println(data)
+	for i, val := range data {
+		lambda += val * point[i]
+	}
+	lambda += point[len(point)-1]
+	return []float64{lambda , math.Sqrt(lambda)}
+}
 
+func (p *Posterior) CalcPosteriorPredictive(results []PosteriorResult, data []float64, numsamples int) []float64 {
+	//weights correspond to likelihoods
+	// for num samples, weighted randomly select a result based on likelihood
+	// for each result, sample a data point from the likelihood distribution using the result's parameters as priors
+	// return the samples
+	weights := make([]float64, len(results))
+	posteriorIndices := make([]int64, len(results))
 
 	for i, result := range results {
 		posteriorIndices[i] = int64(i)
-		weights[i] = result.Probability
+		weights[i] = result.LogLikelihood   
 	}
+	
 
-	for i := 0; i < numsamples; i++ {
-		index := weightedSample(posteriorIndices, weights)
-		result := results[index]
-		// create distribution from result
-		// for each param in p.LikelohoodParams, set the value to the result's param
+	//get minumum weight
+	maxLL := weights[0]
+	maxLLIndex := 0
 
-		params := p.LikelihoodParams
-		pindex := 0
-		for j, _ := range params.Params {
-			params.Params[j] = result.Params[pindex]
-			pindex++
+	for index, weight := range weights {
+		if weight > maxLL {
+			maxLL = weight
+			maxLLIndex = index
 		}
-
-		dist := params.CreateDist()
-
-		sample := SampleDist(dist, 1)
-
-		posteriorSamples[i] = sample
-
-		
 	}
+
+	//these params are from Markov Chain Grid, must be transformed to rate variable
+	maxLLParams := results[maxLLIndex].Params
+	maxLLParams = linkFunc(maxLLParams, data)
+
+	maxLLDistParams := p.LikelihoodParams.Params
+	
+	LLKeys := getParamKeys(p.LikelihoodParams.Dist)
+
+	for i, key := range LLKeys {
+		maxLLDistParams[key] = maxLLParams[i]
+	}
+
+	MaxLLDist := p.LikelihoodParams.CreateDist() 
+
+	//fmt.Println(maxLLDistParams)
+
+	posteriorSamples := SampleDist(MaxLLDist, numsamples)
 
 	return posteriorSamples
 }
 
 func (m *MarkovChain) UnitRandomWalk(index int64, numsteps int) ([][]float64, []float64) {
-	indices := make([]int64, numsteps + 1)
-	likelihoods := make([]float64, numsteps + 1)
-	samples := make([][]float64, numsteps + 1)
+	indices := make([]int64, numsteps+1)
+	likelihoods := make([]float64, numsteps+1)
+	samples := make([][]float64, numsteps+1)
 	// find closest point in grid to initial conditions
 
 	startingIndex := index
 
-
 	point := m.Grid.RawRowView(int(index))
-	m.Likelihood.Params = point  // Fix: Assign the value to a slice of length 1
+	m.Likelihood.Params = point // Fix: Assign the value to a slice of length 1
 
 	indices[0] = index
 	samples[0] = point
-	likelihoods[0] = m.Likelihood.CalcLikelihood()
+	likelihoods[0] = m.Likelihood.CalcDataLikelihood()
 
 	for i := 0; i < numsteps; i++ {
 		// find neighbors of closest point
@@ -210,14 +294,14 @@ func (m *MarkovChain) UnitRandomWalk(index int64, numsteps int) ([][]float64, []
 		index = neighbors[rand.Intn(len(neighbors))]
 
 		indices[i+1] = index
-		
+
 		if index < 0 || index >= int64(m.Grid.RawMatrix().Rows) {
 			index = startingIndex
 		}
 
 		point := m.Grid.RawRowView(int(index))
-		m.Likelihood.Params = point 
-		likelihoods[i+1] = m.Likelihood.CalcLikelihood()
+		m.Likelihood.Params = point
+		likelihoods[i+1] = m.Likelihood.CalcDataLikelihood()
 		samples[i+1] = point
 	}
 
@@ -230,20 +314,19 @@ func (m *MarkovChain) LatticeRandomWalk(index int64, numsteps int) ([][]float64,
 	// calculate likelihood of each neighbor
 	// normalize likelihoods from just the neighbors
 	// randomly select neighbor based on normalized likelihood
-	indices := make([]int64, numsteps + 1)
-	likelihoods := make([]float64, numsteps + 1)
-	samples := make([][]float64, numsteps + 1)
+	indices := make([]int64, numsteps+1)
+	likelihoods := make([]float64, numsteps+1)
+	samples := make([][]float64, numsteps+1)
 	// find closest point in grid to initial conditions
 
 	startingIndex := index
 
-
 	point := m.Grid.RawRowView(int(index))
-	m.Likelihood.Params = point  // Fix: Assign the value to a slice of length 1
+	m.Likelihood.Params = point // Fix: Assign the value to a slice of length 1
 
 	indices[0] = index
 	samples[0] = point
-	likelihoods[0] = m.Likelihood.CalcLikelihood()
+	likelihoods[0] = m.Likelihood.CalcDataLikelihood()
 
 	for i := 0; i < numsteps; i++ {
 		// find neighbors of closest point
@@ -256,7 +339,7 @@ func (m *MarkovChain) LatticeRandomWalk(index int64, numsteps int) ([][]float64,
 			}
 			point := m.Grid.RawRowView(int(neighbor))
 			m.Likelihood.Params = point // Fix: Assign the value to a slice of length 1
-			neighborLikelihoods[j] = m.Likelihood.CalcLikelihood()
+			neighborLikelihoods[j] = m.Likelihood.CalcDataLikelihood()
 		}
 		// normalize likelihoods from just the neighbors
 		neighborLikelihoods = Normalize(neighborLikelihoods)
@@ -284,7 +367,7 @@ func (m *MarkovChain) LatticeRandomWalk(index int64, numsteps int) ([][]float64,
 		}
 
 		point := m.Grid.RawRowView(int(index))
-		m.Likelihood.Params = point 
+		m.Likelihood.Params = point
 		likelihoods[i+1] = neighborLL
 		samples[i+1] = point
 
@@ -296,23 +379,22 @@ func (m *MarkovChain) LatticeRandomWalk(index int64, numsteps int) ([][]float64,
 func (m *MarkovChain) GaussianRandomWalk(index int64, numsteps int) ([][]float64, []float64) {
 	// make normal distributions with mu and stdev for each dimension
 
-	indices := make([]int64, numsteps + 1)
-	likelihoods := make([]float64, numsteps + 1)
-	fullsamples := make([][]float64, numsteps + 1)
+	indices := make([]int64, numsteps+1)
+	likelihoods := make([]float64, numsteps+1)
+	fullsamples := make([][]float64, numsteps+1)
 
 	point := m.Grid.RawRowView(int(index))
-	m.Likelihood.Params = point  // Fix: Assign the value to a slice of length 1
+	m.Likelihood.Params = point // Fix: Assign the value to a slice of length 1
 
 	indices[0] = index
 	fullsamples[0] = point
-	likelihoods[0] = m.Likelihood.CalcLikelihood()
-
+	likelihoods[0] = m.Likelihood.CalcDataLikelihood()
 
 	distparams := DistributionParams{
-		Dist : "Normal",
-		Params : map[string]float64{
-			"Mu" : 0.0,
-			"Sigma" : 1.0,
+		Dist: "Normal",
+		Params: map[string]float64{
+			"Mu":    0.0,
+			"Sigma": 1.0,
 		},
 	}
 
@@ -322,17 +404,17 @@ func (m *MarkovChain) GaussianRandomWalk(index int64, numsteps int) ([][]float64
 		var samples []int64
 		sample := SampleDist(dist, 1)
 		cdf := dist.CDF(sample[0])
-		steps := math.Round(cdf * float64(m.SampleSize)) 
-		
-	  samples = append(samples, (int64(steps) + index) % int64(m.Grid.RawMatrix().Rows))
-		samples = append(samples, (index - int64(steps)) % int64(m.Grid.RawMatrix().Rows))
+		steps := math.Round(cdf * float64(m.SampleSize))
+
+		samples = append(samples, (int64(steps)+index)%int64(m.Grid.RawMatrix().Rows))
+		samples = append(samples, (index-int64(steps))%int64(m.Grid.RawMatrix().Rows))
 
 		for j := 1; j < len(m.Distributions); j++ {
 			sample := SampleDist(dist, 1)
 			cdf := dist.CDF(sample[0])
 			steps := math.Round(cdf * float64(m.SampleSize) * float64(j))
 
-			samples = append(samples, (int64(steps) + index) % int64(m.Grid.RawMatrix().Rows))
+			samples = append(samples, (int64(steps)+index)%int64(m.Grid.RawMatrix().Rows))
 		}
 
 		// calculate likelihood of each neighbor sample
@@ -343,7 +425,7 @@ func (m *MarkovChain) GaussianRandomWalk(index int64, numsteps int) ([][]float64
 			}
 			point := m.Grid.RawRowView(int(neighbor))
 			m.Likelihood.Params = point // Fix: Assign the value to a slice of length 1
-			neighborLikelihoods[j] = m.Likelihood.CalcLikelihood()			
+			neighborLikelihoods[j] = m.Likelihood.CalcDataLikelihood()
 		}
 
 		// normalize likelihoods from just the neighbors
@@ -367,14 +449,19 @@ func (m *MarkovChain) GaussianRandomWalk(index int64, numsteps int) ([][]float64
 		index = samples[neighborIndex]
 
 		indices[i+1] = index
-		fullsamples[i+1] = m.Grid.RawRowView(int(math.Abs(float64(index)) + 1) % m.Grid.RawMatrix().Rows)
+		fullsamples[i+1] = m.Grid.RawRowView(int(math.Abs(float64(index))+1) % m.Grid.RawMatrix().Rows)
 		likelihoods[i+1] = neighborLL
 	}
 
 	return fullsamples, likelihoods
 }
 
-func (m *MarkovChain) MetropolisHastings(index int64, numsteps int) ([][]float64, []float64) {
+func (m *MarkovChain) MetropolisHastings(index int64, numsteps int, burnin int) ([][]float64, []float64) {
+	// Validate burn-in
+	if burnin >= numsteps {
+		panic("Burn-in period must be less than the total number of steps")
+	}
+
 	indices := make([]int64, numsteps+1)
 	likelihoods := make([]float64, numsteps+1)
 
@@ -382,76 +469,63 @@ func (m *MarkovChain) MetropolisHastings(index int64, numsteps int) ([][]float64
 	currentIndex := index
 	point := m.Grid.RawRowView(int(currentIndex))
 	m.Likelihood.Params = point
-	currentLikelihood := m.Likelihood.CalcLikelihood()
+	currentLikelihood := m.Likelihood.CalcDataLikelihood()
 
 	indices[0] = currentIndex
 	likelihoods[0] = currentLikelihood
 
 	samples := make([][]float64, numsteps+1)
 	samples[0] = make([]float64, len(point))
+	copy(samples[0], point)
 
 	// Metropolis-Hastings Sampling
 	for i := 1; i <= numsteps; i++ {
-			// Propose a new index (neighbor)
-			neighbors := m.GetNeighbors(currentIndex)
-			numNeighbors := len(neighbors)
+		// Propose a new index (neighbor)
+		neighbors := m.GetNeighbors(currentIndex)
+		numNeighbors := len(neighbors)
 
-			// Compute likelihoods of neighbors
-			neighborLikelihoods := make([]float64, numNeighbors)
-			totalLikelihood := 0.0
-			for j, neighborIndex := range neighbors {
-					if neighborIndex < 0 {
-							neighborIndex += int64(m.Grid.RawMatrix().Rows)
-					} else if neighborIndex >= int64(m.Grid.RawMatrix().Rows) {
-							neighborIndex -= int64(m.Grid.RawMatrix().Rows)
-					}
-					neighborPoint := m.Grid.RawRowView(int(neighborIndex))
-					m.Likelihood.Params = neighborPoint
-					likelihood := m.Likelihood.CalcLikelihood()
-					neighborLikelihoods[j] = likelihood
-					totalLikelihood += likelihood
-			}
+		// Randomly select a neighbor
+		proposedIndex := neighbors[rand.Intn(numNeighbors)]
 
-        // Normalize neighbor likelihoods to create a probability distribution
-        for j := range neighborLikelihoods {
-            neighborLikelihoods[j] /= totalLikelihood
-        }
+		// Handle index wrapping
+		if proposedIndex < 0 {
+			proposedIndex += int64(m.Grid.RawMatrix().Rows)
+		} else if proposedIndex >= int64(m.Grid.RawMatrix().Rows) {
+			proposedIndex -= int64(m.Grid.RawMatrix().Rows)
+		}
 
-        // Sample a neighbor index weighted by likelihoods
-        proposedIndex := weightedSample(neighbors, neighborLikelihoods)
+		// Compute likelihood of proposed state
+		proposedPoint := m.Grid.RawRowView(int(proposedIndex))
+		m.Likelihood.Params = proposedPoint
+		proposedLikelihood := m.Likelihood.CalcDataLikelihood()
 
-			// Handle index wrapping
-			if proposedIndex < 0 {
-					proposedIndex += int64(m.Grid.RawMatrix().Rows)
-			} else if proposedIndex >= int64(m.Grid.RawMatrix().Rows) {
-					proposedIndex -= int64(m.Grid.RawMatrix().Rows)
-			}
+		// Acceptance probability
+		acceptanceProb := math.Exp(currentLikelihood - proposedLikelihood)
+		if acceptanceProb > 1 {
+			acceptanceProb = 1
+		}
 
-			// Compute likelihood of proposed state
-			proposedPoint := m.Grid.RawRowView(int(proposedIndex))
-			m.Likelihood.Params = proposedPoint
-			proposedLikelihood := m.Likelihood.CalcLikelihood()
+		accepted := rand.Float64() < acceptanceProb
 
-			// Acceptance probability
-			acceptanceRatio := proposedLikelihood / currentLikelihood
-
-			// Accept or reject the proposal
-			if rand.Float64() < acceptanceRatio {
-					// Accept the proposed state
-					samples[i] = proposedPoint
-					likelihoods[i] = proposedLikelihood
-					currentIndex = proposedIndex
-					currentLikelihood = proposedLikelihood
-					
-			}	else {
-					// Reject the proposed state
-					samples[i] = m.Grid.RawRowView(int(currentIndex))
-					likelihoods[i] = currentLikelihood		
-			}
+		if accepted {
+			// Accept the proposed state
+			samples[i] = make([]float64, len(proposedPoint))
+			copy(samples[i], proposedPoint)
+			likelihoods[i] = proposedLikelihood
+			currentIndex = proposedIndex
+			currentLikelihood = proposedLikelihood
+		} else {
+			// Reject the proposed state
+			samples[i] = make([]float64, len(samples[i-1]))
+			copy(samples[i], samples[i-1])
+			likelihoods[i] = currentLikelihood
+		}
 	}
 
-	return samples, likelihoods
+	// Discard burn-in samples
+	return samples[burnin:], likelihoods[burnin:]
 }
+
 
 func (m *MarkovChain) HamiltonianMonteCarlo(index int64, numSamples int) ([][]float64, []float64) {
 	indices := make([]int64, numSamples+1)
@@ -464,18 +538,18 @@ func (m *MarkovChain) HamiltonianMonteCarlo(index int64, numSamples int) ([][]fl
 
 	// Negative log probability function
 	negativeLogProb := func(q []float64) float64 {
-			m.Likelihood.Params = q
-			return m.Likelihood.CalcLikelihood()
+		m.Likelihood.Params = q
+		return m.Likelihood.CalcDataLikelihood()
 	}
 
 	// Gradient of the negative log probability
 	dVdq := func(q []float64) []float64 {
-			return gradient(negativeLogProb, q)
+		return gradient(negativeLogProb, q)
 	}
 
 	normalDist := distuv.Normal{
-			Mu:    0,
-			Sigma: 1,
+		Mu:    0,
+		Sigma: 1,
 	}
 
 	// Start sampling
@@ -492,65 +566,82 @@ func (m *MarkovChain) HamiltonianMonteCarlo(index int64, numSamples int) ([][]fl
 
 	p0 := make([]float64, dimension)
 	for i := range p0 {
-			p0[i] = normalDist.Rand()
+		p0[i] = normalDist.Rand()
 	}
-	
+
 	leapfrogSteps := 25
 	for i := 1; i <= numSamples; i++ {
-			qCurrent := samples[i-1]
-			p0 := make([]float64, dimension)
-			for j := range p0 {
-					p0[j] = normalDist.Rand()
-			}
+		qCurrent := samples[i-1]
+		p0 := make([]float64, dimension)
+		for j := range p0 {
+			p0[j] = normalDist.Rand()
+		}
 
-			qNew, pNew := leapfrog(qCurrent, p0, dVdq, stepSize, leapfrogSteps)
+		qNew, pNew := leapfrog(qCurrent, p0, dVdq, stepSize, leapfrogSteps)
 
-			// Compute Hamiltonian for current and new positions
-			startHamiltonian := hamiltonian(qCurrent, p0, negativeLogProb)
-			newHamiltonian := hamiltonian(qNew, pNew, negativeLogProb)
+		// Compute Hamiltonian for current and new positions
+		startHamiltonian := hamiltonian(qCurrent, p0, negativeLogProb)
+		newHamiltonian := hamiltonian(qNew, pNew, negativeLogProb)
 
-			acceptanceProb := newHamiltonian / startHamiltonian 
+		// Acceptance probability (correct)
+		acceptanceProb := math.Exp(startHamiltonian - newHamiltonian)
+		if acceptanceProb > 1 {
+			acceptanceProb = 1
+		}
+		accepted := rand.Float64() < acceptanceProb
 
-			accepted := rand.Float64() < acceptanceProb
+		if accepted {
+			// Accept the new sample
+			samples[i] = qNew
+			likelihoods[i] = negativeLogProb(qNew)
+		} else {
+			// Reject the new sample; use the current sample again
+			samples[i] = qCurrent
+			likelihoods[i] = negativeLogProb(qCurrent)
+		}
 
-			if accepted {
-					// Accept the new sample
-					samples[i] = qNew
-					likelihoods[i] = negativeLogProb(qNew)
-			} else {
-					// Reject the new sample; use the current sample again
-					samples[i] = qCurrent
-					likelihoods[i] = negativeLogProb(qCurrent)
-			}
-
-			
 	}
 
 	return samples, likelihoods
 }
 
-func (m *MarkovChain) CreateGrid()  {
-	first := SampleDist(m.Distributions[0], m.SampleSize)
-	var cart [][]float64
-	for _, f := range first {
-		cart = append(cart, []float64{f})
+func (m *MarkovChain) CreateGrid() {
+	// Create grid by sampling directly from each distribution
+	DistSamples := make([][]float64, len(m.Distributions))
+
+	for i, distParams := range m.Distributions {
+		dist := distParams.CreateDist()
+		DistSamples[i] = make([]float64, m.SampleSize)
+
+		// Generate samples uniformly from the distribution
+		for j := 0; j < m.SampleSize; j++ {
+			DistSamples[i][j] = dist.Rand()
+		}
+		slices.Sort(DistSamples[i])
 	}
 
-	// Iteratively calculate Cartesian products with remaining priors
-	for prior := 1; prior < len(m.Distributions); prior++ {
-		sampled := SampleDist(m.Distributions[prior], m.SampleSize)
-		cart = Combination(cart, sampled)
+	// Create a Cartesian product of the samples to form the grid
+	numPoints := math.Pow(float64(m.SampleSize), float64(len(m.Distributions)))
+	grid := mat.NewDense(int(numPoints), len(m.Distributions), nil)
+
+	// Combine samples from each dimension
+	DistComb := [][]float64{make([]float64, 0)}
+	for _, dist := range DistSamples {
+		DistComb = Combination(DistComb, dist)
 	}
 
-	matrix := mat.NewDense(len(cart), len(cart[0]), nil)
-	for i, row := range cart {
+
+	// Fill the grid with the combined points
+	for i, row := range DistComb {
 		for j, val := range row {
-			matrix.Set(i, j, val)
+			grid.Set(i, j, val)
 		}
 	}
 
-	m.Grid = *matrix
+
+	m.Grid = *grid
 }
+
 func (d *DistributionParams) CreateDist() Distribution {
 	switch d.Dist {
 	case "Bernoulli":
@@ -624,15 +715,15 @@ func (m *MarkovChain) GetNeighbors(index int64) []int64 {
 
 	// For each dimension, consider moving +1 or -1 step
 	for dim := 0; dim < m.Grid.RawMatrix().Cols; dim++ {
-			step := int64(math.Pow(float64(m.SampleSize), float64(dim)))
+		step := int64(math.Pow(float64(m.SampleSize), float64(dim)))
 
-			// Move forward in this dimension
-			forward := (index + step) % int64(m.Grid.RawMatrix().Rows)
-			neighbors = append(neighbors, forward)
+		// Move forward in this dimension
+		forward := (index + step) % int64(m.Grid.RawMatrix().Rows)
+		neighbors = append(neighbors, forward)
 
-			// Move backward in this dimension
-			backward := (index - step + int64(m.Grid.RawMatrix().Rows)) % int64(m.Grid.RawMatrix().Rows)
-			neighbors = append(neighbors, backward)
+		// Move backward in this dimension
+		backward := (index - step + int64(m.Grid.RawMatrix().Rows)) % int64(m.Grid.RawMatrix().Rows)
+		neighbors = append(neighbors, backward)
 	}
 
 	return neighbors
@@ -665,40 +756,27 @@ func RemoveDuplicates(indices []int64, likelihoods []float64) ([]int64, []float6
 	var newLikelihoods []float64
 
 	for i, index := range indices {
-			if !seen[index] {
-					seen[index] = true
-					newIndices = append(newIndices, index)
-					newLikelihoods = append(newLikelihoods, likelihoods[i])
-			}
+		if !seen[index] {
+			seen[index] = true
+			newIndices = append(newIndices, index)
+			newLikelihoods = append(newLikelihoods, likelihoods[i])
+		}
 	}
 
 	return newIndices, newLikelihoods
 }
-func weightedSample(indices []int64, weights []float64) int64 {
-	cumulativeWeights := make([]float64, len(weights))
-	cumulativeWeights[0] = weights[0]
-	for i := 1; i < len(weights); i++ {
-			cumulativeWeights[i] = cumulativeWeights[i-1] + weights[i]
-	}
-	r := rand.Float64()
-	for i, cw := range cumulativeWeights {
-			if r < cw {
-					return indices[i]
-			}
-	}
-	return indices[len(indices)-1] // Return the last index if not found earlier
-}
+
 func gradient(f func([]float64) float64, x []float64) []float64 {
 	grad := make([]float64, len(x))
 	epsilon := 1e-5
 	fx := f(x)
 
 	for i := range x {
-			xForward := make([]float64, len(x))
-			copy(xForward, x)
-			xForward[i] += epsilon
-			fxForward := f(xForward)
-			grad[i] = (fxForward - fx) / epsilon
+		xForward := make([]float64, len(x))
+		copy(xForward, x)
+		xForward[i] += epsilon
+		fxForward := f(xForward)
+		grad[i] = (fxForward - fx) / epsilon
 	}
 	return grad
 }
@@ -710,23 +788,21 @@ func leapfrog(q []float64, p []float64, dVdq func([]float64) []float64, stepSize
 
 	// Half step for momentum
 	gradV := dVdq(qNew)
-	
-	for i := 0; i < leapfrogSteps; i++ {
-			for i := range pNew {
-				pNew[i] -= stepSize * gradV[i] / 2.0
-			}
-			// Full step for position
-			for j := range qNew {
-					qNew[j] += stepSize * pNew[j]
-			}
-			// Full step for momentum, except at the end of trajectory
-			gradV = dVdq(qNew)
-			for j := range pNew {
-					pNew[j] -= stepSize * gradV[j] / 2.0
-			}
-	}
-	
 
+	for i := 0; i < leapfrogSteps; i++ {
+		for i := range pNew {
+			pNew[i] -= stepSize * gradV[i] / 2.0
+		}
+		// Full step for position
+		for j := range qNew {
+			qNew[j] += stepSize * pNew[j]
+		}
+		// Full step for momentum, except at the end of trajectory
+		gradV = dVdq(qNew)
+		for j := range pNew {
+			pNew[j] -= stepSize * gradV[j] / 2.0
+		}
+	}
 
 	return qNew, pNew
 }
@@ -741,16 +817,11 @@ func hamiltonian(q []float64, p []float64, negativeLogProb func([]float64) float
 func (l *Likelihood) NegativeLogProb(q []float64) float64 {
 	// Update l.Params with q
 	copy(l.Params, q)
-	return l.CalcLikelihood() // Assuming CalcLikelihood returns negative log-likelihood
-}
-
-type BayesianModel struct {
-	priors     []Prior
-	likelihood Likelihood
-	posterior  Posterior
+	return l.CalcDataLikelihood() // Assuming CalcDataLikelihood returns negative log-likelihood
 }
 
 type mapFunc[E any] func(E) E
+
 func Map[S ~[]E, E any](s S, f mapFunc[E]) S {
 	result := make(S, len(s))
 	for i := range s {
@@ -827,4 +898,3 @@ func Normalize(data []float64) []float64 {
 	}
 	return data
 }
-
