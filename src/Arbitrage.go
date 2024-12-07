@@ -19,6 +19,8 @@ func Arbitrage(statspath string, oddspath string) []map[string]any {
 	oddsMap := make(map[string][]map[string]any)
 	// Read odds from JSON files
 	oddsData := ReadOdds(oddspath)
+
+	fmt.Println(oddsData)
 	// extract odds and store in oddsMap
 	for _, d := range oddsData {
 		data := d.(map[string]interface{})
@@ -46,6 +48,8 @@ func Arbitrage(statspath string, oddspath string) []map[string]any {
 		}
 	}
 
+	fmt.Println(oddsMap)
+
 	playerPoints := oddsMap["player_points"]
 	playerRebounds := oddsMap["player_rebounds"]
 	playerAssists := oddsMap["player_assists"]
@@ -59,6 +63,7 @@ func Arbitrage(statspath string, oddspath string) []map[string]any {
 
 	// Read stats from directory
 	stats := ReadPreds(statspath)
+
 	for player, playerStats := range stats {
 		points := playerStats["points"]
 		rebounds := playerStats["totReb"]
@@ -322,7 +327,7 @@ func SearchPlayerOdds(m []map[string]any, val string) []map[string]any {
 	odds := make([]map[string]any, 0)
 	for _, v := range m {
 		if v["description"] == val {
-			odds = append(odds, v)
+			odds = append(odds, v) 
 		}
 	}
 	return odds
@@ -464,38 +469,51 @@ func RenameDirsInDir(dir string) error {
 }
 
 func ReadOdds(dir string) map[string]interface{} {
+	// Rename directories
 	err := RenameDirsInDir(dir)
 	if err != nil {
 		panic(fmt.Errorf("failed to rename directories: %w", err))
 	}
 
+	// Prepare map to hold data
 	data := make(map[string]interface{})
 
+	// Walk through the directory and process `odds.json` files
 	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return err
+			return fmt.Errorf("error accessing path %s: %w", path, err)
 		}
 
-		if filepath.Ext(info.Name()) == ".json" {
+		// Ensure it's a file and has the correct extension
+		if !info.IsDir() && filepath.Ext(info.Name()) == ".json" && info.Name() == "odds.json" {
 			fmt.Println("Reading JSON file:", path)
+
+			// Read file content
 			fileData, err := os.ReadFile(path)
 			if err != nil {
 				return fmt.Errorf("failed to read file %s: %w", path, err)
 			}
 
+			// Unmarshal JSON content
 			var fileContent interface{}
 			err = json.Unmarshal(fileData, &fileContent)
 			if err != nil {
 				return fmt.Errorf("failed to unmarshal JSON from file %s: %w", path, err)
 			}
+
+			// Store data with file path as key
 			data[path] = fileContent
 		}
+
 		return nil
 	})
 
 	if err != nil {
-		panic(fmt.Errorf("failed to walk the directory: %w", err))
+		panic(fmt.Errorf("failed to process directory: %w", err))
 	}
+
+	// Print the collected data for debugging
+	fmt.Println("Collected Data:", data)
 
 	return data
 }
@@ -522,40 +540,41 @@ func ReadPreds(dir string) map[string]map[string][]float64 {
 
 		jsonData := make(map[string]interface{})
 		err = json.NewDecoder(f).Decode(&jsonData)
-		if err != nil {
-			panic(fmt.Errorf("failed to decode JSON file %s: %w", path, err))
-		}
 
-		var key string
-		for k := range jsonData {
-			key = k
-			break
-		}
-		playerPredsIface, ok := jsonData[key].([]interface{})
-		if !ok {
-			panic(fmt.Errorf("unexpected structure for player predictions"))
-		}
+		
+		if len(jsonData) > 0 && err == nil {
 
-		if len(playerPredsIface) < 6 {
-			panic(fmt.Errorf("not enough prediction arrays for player %s", player))
-		}
+			var key string
+			for k := range jsonData {
+				key = k
+				break
+			}
+			playerPredsIface, ok := jsonData[key].([]interface{})
+			if !ok {
+				panic(fmt.Errorf("unexpected structure for player predictions"))
+			}
 
-		points := toFloat64Slice(playerPredsIface[0].([]interface{}))
-		assists := toFloat64Slice(playerPredsIface[1].([]interface{}))
-		totReb := toFloat64Slice(playerPredsIface[2].([]interface{}))
-		blocks := toFloat64Slice(playerPredsIface[3].([]interface{}))
-		steals := toFloat64Slice(playerPredsIface[4].([]interface{}))
-		turnovers := toFloat64Slice(playerPredsIface[5].([]interface{}))
 
-		data[player] = map[string][]float64{
-			"points":    points,
-			"assists":   assists,
-			"totReb":    totReb,
-			"blocks":    blocks,
-			"steals":    steals,
-			"turnovers": turnovers,
+			if len(playerPredsIface) < 6 {
+				panic(fmt.Errorf("not enough prediction arrays for player %s", player))
+			}
+
+			points := toFloat64Slice(playerPredsIface[0].([]interface{}))
+			assists := toFloat64Slice(playerPredsIface[1].([]interface{}))
+			totReb := toFloat64Slice(playerPredsIface[2].([]interface{}))
+			blocks := toFloat64Slice(playerPredsIface[3].([]interface{}))
+			steals := toFloat64Slice(playerPredsIface[4].([]interface{}))
+			turnovers := toFloat64Slice(playerPredsIface[5].([]interface{}))
+
+			data[player] = map[string][]float64{
+				"points":    points,
+				"assists":   assists,
+				"totReb":    totReb,
+				"blocks":    blocks,
+				"steals":    steals,
+				"turnovers": turnovers,
+			}
 		}
-		fmt.Println(player)
 	}
 	return data
 }

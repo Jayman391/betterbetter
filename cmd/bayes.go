@@ -200,16 +200,9 @@ var bayesCmd = &cobra.Command{
 										posteriorResults := posterior.CalcPosterior()
 
 										postPred := posterior.CalcPosteriorPredictive(posteriorResults, lagmatTest.RawMatrix().Data, 2500)
-										// remove all negative values
-										postPredReduced := make([]float64, 0)
 										
-										for _, val := range postPred {
-											if val > 0 {
-												postPredReduced = append(postPredReduced, val)
-											}
-										}
 										// turn list of lists into list
-										postPredList := append([]float64{}, postPredReduced...)
+										postPredList := append([]float64{}, postPred...)
 
 										playerPreds[player] = append(playerPreds[player], postPredList)
 
