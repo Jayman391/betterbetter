@@ -5,8 +5,7 @@ go install
 
 year=2024
 sport="nba"
-teams="celtics,lakers"
-#,cavaliers,thunder,mavericks,warriors,grizzlies,nuggets,suns,magic,knicks,bucks"
+teams="celtics,cavaliers,thunder,mavericks,warriors,grizzlies,nuggets,suns,magic,knicks,bucks,lakers"
 
 # Fetch the initial data for the specified sport, teams, and year
 betterbetter fetchdata -s "$sport" -t "$teams" -y "$year"
@@ -56,4 +55,4 @@ for d in "${dates[@]}"; do
 done
 
 # Make bets with the specified rules and limits
-betterbetter makebets -r 10 -m 2000
+betterbetter makebets -r 10 -m 10000
