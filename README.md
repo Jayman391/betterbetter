@@ -1,55 +1,41 @@
-### flow of project
+## Flow of Project
 
-scrape player and team data
-scrape player and team odds
+1. Scrape player and team data:
+  - `-s`: sport
+  - `-t`: teams
+  - `-p`: players
+  - `-y`: year
 
-'''
-betterbetter fetchdata -s -t -p -y
-betterbetter fetchodds -s -d
-'''
+  Example command: `betterbetter fetchdata -s -t -p -y`
 
-build regression model and forecast probability distributions of metrics for each team and player
-compare predicted probabilities to odds probabilities
+2. Scrape player and team odds:
+  - `-s`: sport
+  - `-d`: date
 
-'''
-betterbetter bayes 
-'''
+  Example command: `betterbetter fetchodds -s -d`
 
-calculate differentials between predicted and actual
-average differentials across sportsbooks
+3. Build regression model and forecast probability distributions of metrics for each team and player. Compare predicted probabilities to odds probabilities:
+  - `-l`: lags for AR model
+  - `-c`: chains for Bayesian sampler
+  - `-e`: examples for posterior predictive
+  - `-s`: number of samples from posterior predictive
 
-'''
-betterbetter arbitrage
-'''
+  Example command: `betterbetter bayes -l -c -e -s`
 
-set risk reward ratio
-create parlays via combinations of bets
-  calculate differentials on parlays
-    universe includes individual bets and parlays all with expected values
-use differentials and expected values for each bet in universe
-run optimization routine to maximize expected value given risk/reward constraint
-  make (multiple) sets of bets that satisfy the constraints
+4. Calculate differentials between predicted and actual. Average differentials across sportsbooks:
+  - `-s`: path to posterior predictions
+  - `-o`: path to odds data
 
-'''
-betterbetter makebets -r -m
-'''
+  Example command: `betterbetter arbitrage -s -o`
 
+5. Set risk reward ratio. Create parlays via combinations of bets. Calculate differentials on parlays. The universe includes individual bets and parlays, all with expected values. Use differentials and expected values for each bet in the universe. Run optimization routine to maximize expected value given risk/reward constraint. Make sets of bets that satisfy the constraints:
+  - `-r`: risk reward ratio
+  - `-m`: maximum number of bets to return
 
-backtest each set of bets and calculate expected profit
-calculate average % profit for risk reward scheme
-make betslips for new games
-'''
-betterbetter predict
-'''
+  Example command: `betterbetter makebets -r -m`
 
-# in run_pipeline.sh
+6. Backtest each set of bets and calculate expected profit. Calculate average % profit for risk reward scheme. Make betslips for new games:
 
-'''
-betterbetter fetchdata -s "" -t ",,," -p ",,," -y "YYYY"
-betterbetter fetchodds -s "" -d "YYYY-MM-DD"
-betterbetter model
-betterbetter arbitrage
-betterbetter makebets -r ""
-betterbetter predict
-'''
+  Example command: `betterbetter predict`
 
+7. Look at `run_pipeline.sh` to set up the full pipeline with associated directories.
