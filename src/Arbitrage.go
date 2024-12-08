@@ -1,60 +1,45 @@
 package src
 
 import (
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"math"
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 )
 
+// Removed the ArbitrageResult struct since we no longer need it.
 
-type ArbitrageResult struct {
-	ExpectedValue float64
-	BookProb float64
-	ModelProb float64
-	Differential float64
-	Bet map[string]any
-}
-
-
-func Arbitrage(statspath string, oddspath string) []ArbitrageResult {
-
-	results := make([]ArbitrageResult, 0)
+// Arbitrage now returns a slice of maps
+func Arbitrage(statspath string, oddspath string) []map[string]any {
+	results := make([]map[string]any, 0)
 
 	oddsMap := make(map[string][]map[string]any)
 	// Read odds from JSON files
 	oddsData := ReadOdds(oddspath)
-	// extract odds and store in oddsMap
-	for _, data := range oddsData {
-		// convert data to map[string]any
-		data := data.(map[string]interface{})
-		gameData := data["data"]
-		// convert gameData to map[string]any
-		gameDataMap := gameData.(map[string]interface{})
-		time := gameDataMap["commence_time"]
-		homeTeam := gameDataMap["home_team"]
-		awayTeam := gameDataMap["away_team"]
 
-		bookmakers := gameDataMap["bookmakers"]
-		// convert bookmakers to map[string]any
-		bookmakersMap := bookmakers.([]interface{})
-		for _, bookmaker := range bookmakersMap {
-			markets := bookmaker.(map[string]interface{})["markets"]
-			// convert markets to map[string]any
-			marketsMap := markets.([]interface{})
-			for _, market := range marketsMap {
-				marketMap := market.(map[string]interface{})
+	fmt.Println(oddsData)
+	// extract odds and store in oddsMap
+	for _, d := range oddsData {
+		data := d.(map[string]interface{})
+		gameData := data["data"].(map[string]interface{})
+		time := gameData["commence_time"]
+		homeTeam := gameData["home_team"]
+		awayTeam := gameData["away_team"]
+
+		bookmakers := gameData["bookmakers"].([]interface{})
+		for _, bookmaker := range bookmakers {
+			markets := bookmaker.(map[string]interface{})["markets"].([]interface{})
+			for _, m := range markets {
+				marketMap := m.(map[string]interface{})
 				key := marketMap["key"].(string)
 				outcomes := marketMap["outcomes"].([]interface{})
-				
+
 				for _, outcome := range outcomes {
 					outcomeMap := outcome.(map[string]interface{})
-					outcomeMap["time"] = time	
+					outcomeMap["time"] = time
 					outcomeMap["home_team"] = homeTeam
 					outcomeMap["away_team"] = awayTeam
 					oddsMap[key] = append(oddsMap[key], outcomeMap)
@@ -63,221 +48,177 @@ func Arbitrage(statspath string, oddspath string) []ArbitrageResult {
 		}
 	}
 
-	//h2h := oddsMap["h2h"]
-	//spreads := oddsMap["spreads"]
-	//totals := oddsMap["totals"]
+	fmt.Println(oddsMap)
+
 	playerPoints := oddsMap["player_points"]
 	playerRebounds := oddsMap["player_rebounds"]
 	playerAssists := oddsMap["player_assists"]
 	playerBlocks := oddsMap["player_blocks"]
 	playerSteals := oddsMap["player_steals"]
 	playerTurnUnders := oddsMap["player_turnUnders"]
-	//playerDoubleDouble := oddsMap["player_double_double"]
-	//playerTripleDouble := oddsMap["player_triple_double"]
 	playerPointsRebounds := oddsMap["player_points_rebounds"]
 	playerPointsAssists := oddsMap["player_points_assists"]
 	playerReboundsAssists := oddsMap["player_rebounds_assists"]
 	playerPointsReboundsAssists := oddsMap["player_points_rebounds_assists"]
 
-	// Read stats from CSV files
+	// Read stats from directory
 	stats := ReadPreds(statspath)
 
 	for player, playerStats := range stats {
-		// get player stats
 		points := playerStats["points"]
 		rebounds := playerStats["totReb"]
 		assists := playerStats["assists"]
 		blocks := playerStats["blocks"]
 		steals := playerStats["steals"]
-		turnUnders := playerStats["turnUnders"]
+		turnUnders := playerStats["turnovers"]
 
-		// for all player odds, get subset for which descripton=player
+		playerName := strings.ReplaceAll(player, "_", " ")
 
-		pointsOdds := SearchPlayerOdds(playerPoints, player)
-		reboundsOdds := SearchPlayerOdds(playerRebounds, player)
-		assistsOdds := SearchPlayerOdds(playerAssists, player)
-		blocksOdds := SearchPlayerOdds(playerBlocks, player)
-		stealsOdds := SearchPlayerOdds(playerSteals, player)
-		turnUndersOdds := SearchPlayerOdds(playerTurnUnders, player)
-	
-		pointsReboundsOdds := SearchPlayerOdds(playerPointsRebounds, player)
-		pointsAssistsOdds := SearchPlayerOdds(playerPointsAssists, player)
-		reboundsAssistsOdds := SearchPlayerOdds(playerReboundsAssists, player)
-		pointsReboundsAssistsOdds := SearchPlayerOdds(playerPointsReboundsAssists, player)
+		pointsOdds := SearchPlayerOdds(playerPoints, playerName)
+		reboundsOdds := SearchPlayerOdds(playerRebounds, playerName)
+		assistsOdds := SearchPlayerOdds(playerAssists, playerName)
+		blocksOdds := SearchPlayerOdds(playerBlocks, playerName)
+		stealsOdds := SearchPlayerOdds(playerSteals, playerName)
+		turnUndersOdds := SearchPlayerOdds(playerTurnUnders, playerName)
+		pointsReboundsOdds := SearchPlayerOdds(playerPointsRebounds, playerName)
+		pointsAssistsOdds := SearchPlayerOdds(playerPointsAssists, playerName)
+		reboundsAssistsOdds := SearchPlayerOdds(playerReboundsAssists, playerName)
+		pointsReboundsAssistsOdds := SearchPlayerOdds(playerPointsReboundsAssists, playerName)
 
-		//points odds
-			//cdf
+		// Points odds
 		for _, pointBet := range pointsOdds {
-			value := int64(math.Ceil(pointBet["point"].(float64))) // Perform type assertion to convert to int64
+			value := float64(math.Ceil(pointBet["point"].(float64)))
 			cdf := CDF(points, value)
-
 			if pointBet["name"] == "Under" {
 				cdf = 1 - cdf
 			}
 
-			odds := 1.0/pointBet["price"].(float64)
-
+			odds := 1.0 / pointBet["price"].(float64)
 			differential := cdf - odds
-
 			pointBet["type"] = "points"
 
-			results = append(results, ArbitrageResult{
-				ExpectedValue: pointBet["price"].(float64),
-				BookProb: odds,
-				ModelProb: cdf,
-				Differential: differential,
-				Bet: pointBet,
+			results = append(results, map[string]any{
+				"ExpectedValue": pointBet["price"].(float64),
+				"BookProb":      odds,
+				"ModelProb":     cdf,
+				"Differential":  differential,
+				"Bet":           pointBet,
 			})
 		}
 
-
-		//rebound odds
-			//cdf
-
+		// Rebounds odds
 		for _, reboundBet := range reboundsOdds {
-			value := int64(math.Ceil(reboundBet["point"].(float64))) // Perform type assertion to convert to int64
+			value := float64(math.Ceil(reboundBet["point"].(float64)))
 			cdf := CDF(rebounds, value)
 
 			if reboundBet["name"] == "Under" {
 				cdf = 1 - cdf
 			}
 
-			odds := 1.0/reboundBet["price"].(float64)
-
+			odds := 1.0 / reboundBet["price"].(float64)
 			differential := cdf - odds
-
 			reboundBet["type"] = "rebounds"
 
-			results = append(results, ArbitrageResult{
-				ExpectedValue: reboundBet["price"].(float64),
-				BookProb: odds,
-				ModelProb: cdf,
-				Differential: differential,
-				Bet: reboundBet,
+			results = append(results, map[string]any{
+				"ExpectedValue": reboundBet["price"].(float64),
+				"BookProb":      odds,
+				"ModelProb":     cdf,
+				"Differential":  differential,
+				"Bet":           reboundBet,
 			})
-
 		}
 
-		//assist odds
-			//cdf
-
+		// Assist odds
 		for _, assistBet := range assistsOdds {
-			value := int64(math.Ceil(assistBet["point"].(float64))) // Perform type assertion to convert to int64
+			value := float64(math.Ceil(assistBet["point"].(float64)))
 			cdf := CDF(assists, value)
 
 			if assistBet["name"] == "Under" {
 				cdf = 1 - cdf
 			}
 
-			odds := 1.0/assistBet["price"].(float64)
-
+			odds := 1.0 / assistBet["price"].(float64)
 			differential := cdf - odds
-
 			assistBet["type"] = "assists"
 
-			results = append(results, ArbitrageResult{
-				ExpectedValue: assistBet["price"].(float64),
-				BookProb: odds,
-				ModelProb: cdf,
-				Differential: differential,
-				Bet: assistBet,
+			results = append(results, map[string]any{
+				"ExpectedValue": assistBet["price"].(float64),
+				"BookProb":      odds,
+				"ModelProb":     cdf,
+				"Differential":  differential,
+				"Bet":           assistBet,
 			})
-
 		}
 
-		//blocks odds
-			//cdf	
-
+		// Blocks odds
 		for _, blockBet := range blocksOdds {
-			value := int64(math.Ceil(blockBet["point"].(float64))) // Perform type assertion to convert to int64
+			value := float64(math.Ceil(blockBet["point"].(float64)))
 			cdf := CDF(blocks, value)
 
 			if blockBet["name"] == "Under" {
 				cdf = 1 - cdf
 			}
 
-			odds := 1.0/blockBet["price"].(float64)
-
+			odds := 1.0 / blockBet["price"].(float64)
 			differential := cdf - odds
-
 			blockBet["type"] = "blocks"
 
-			results = append(results, ArbitrageResult{
-				ExpectedValue: blockBet["price"].(float64),
-				BookProb: odds,
-				ModelProb: cdf,
-				Differential: differential,
-				Bet: blockBet,
+			results = append(results, map[string]any{
+				"ExpectedValue": blockBet["price"].(float64),
+				"BookProb":      odds,
+				"ModelProb":     cdf,
+				"Differential":  differential,
+				"Bet":           blockBet,
 			})
-
 		}
 
-		//steals odds
-			//cdf
-
+		// Steals odds
 		for _, stealBet := range stealsOdds {
-			value := int64(math.Ceil(stealBet["point"].(float64))) // Perform type assertion to convert to int64
+			value := float64(math.Ceil(stealBet["point"].(float64)))
 			cdf := CDF(steals, value)
 
 			if stealBet["name"] == "Under" {
 				cdf = 1 - cdf
 			}
 
-			odds := 1.0/stealBet["price"].(float64)
-
+			odds := 1.0 / stealBet["price"].(float64)
 			differential := cdf - odds
-
 			stealBet["type"] = "steals"
 
-			results = append(results, ArbitrageResult{
-				ExpectedValue: stealBet["price"].(float64),
-				BookProb: odds,
-				ModelProb: cdf,
-				Differential: differential,
-				Bet: stealBet,
+			results = append(results, map[string]any{
+				"ExpectedValue": stealBet["price"].(float64),
+				"BookProb":      odds,
+				"ModelProb":     cdf,
+				"Differential":  differential,
+				"Bet":           stealBet,
 			})
-
 		}
 
-		//turnUnders odds
-			//cdf
-
+		// Turnovers odds
 		for _, turnUnderBet := range turnUndersOdds {
-			value := int64(math.Ceil(turnUnderBet["point"].(float64))) // Perform type assertion to convert to int64
+			value := float64(math.Ceil(turnUnderBet["point"].(float64)))
 			cdf := CDF(turnUnders, value)
 
 			if turnUnderBet["name"] == "Under" {
 				cdf = 1 - cdf
 			}
 
-			odds := 1.0/turnUnderBet["price"].(float64)
-
+			odds := 1.0 / turnUnderBet["price"].(float64)
 			differential := cdf - odds
+			turnUnderBet["type"] = "turnovers"
 
-			turnUnderBet["type"] = "turnUnders"
-
-			results = append(results, ArbitrageResult{
-				ExpectedValue: turnUnderBet["price"].(float64),
-				BookProb: odds,
-				ModelProb: cdf,
-				Differential: differential,
-				Bet: turnUnderBet,
+			results = append(results, map[string]any{
+				"ExpectedValue": turnUnderBet["price"].(float64),
+				"BookProb":      odds,
+				"ModelProb":     cdf,
+				"Differential":  differential,
+				"Bet":           turnUnderBet,
 			})
-
 		}
 
-		//triple double odds
-			//cartesian3
-				//cdf3
-			
-			
-
-		//points rebounds odds
-			//CombinationSum
-				//cdf
-
+		// Points + Rebounds odds
 		for _, pointReboundBet := range pointsReboundsOdds {
-			value := int64(math.Ceil(pointReboundBet["point"].(float64))) // Perform type assertion to convert to int64
+			value := float64(math.Ceil(pointReboundBet["point"].(float64)))
 			combo := CombinationSum(points, rebounds)
 			cdf := CDF(combo, value)
 
@@ -285,88 +226,68 @@ func Arbitrage(statspath string, oddspath string) []ArbitrageResult {
 				cdf = 1 - cdf
 			}
 
-			odds := 1.0/pointReboundBet["price"].(float64)
-
+			odds := 1.0 / pointReboundBet["price"].(float64)
 			differential := cdf - odds
-
 			pointReboundBet["type"] = "points_rebounds"
 
-			results = append(results, ArbitrageResult{
-				ExpectedValue: pointReboundBet["price"].(float64),
-				BookProb: odds,
-				ModelProb: cdf,
-				Differential: differential,
-				Bet: pointReboundBet,
+			results = append(results, map[string]any{
+				"ExpectedValue": pointReboundBet["price"].(float64),
+				"BookProb":      odds,
+				"ModelProb":     cdf,
+				"Differential":  differential,
+				"Bet":           pointReboundBet,
 			})
 		}
 
-		//points assists odds
-			//CombinationSum
-				//cdf
-		
+		// Points + Assists odds
 		for _, pointAssistBet := range pointsAssistsOdds {
-			value := int64(math.Ceil(pointAssistBet["point"].(float64))) // Perform type assertion to convert to int64
-
+			value := float64(math.Ceil(pointAssistBet["point"].(float64)))
 			combo := CombinationSum(points, assists)
-
 			cdf := CDF(combo, value)
 
 			if pointAssistBet["name"] == "Under" {
 				cdf = 1 - cdf
 			}
 
-			odds := 1.0/pointAssistBet["price"].(float64)
-
+			odds := 1.0 / pointAssistBet["price"].(float64)
 			differential := cdf - odds
-
 			pointAssistBet["type"] = "points_assists"
 
-			results = append(results, ArbitrageResult{
-				ExpectedValue: pointAssistBet["price"].(float64),
-				BookProb: odds,
-				ModelProb: cdf,
-				Differential: differential,
-				Bet: pointAssistBet,
+			results = append(results, map[string]any{
+				"ExpectedValue": pointAssistBet["price"].(float64),
+				"BookProb":      odds,
+				"ModelProb":     cdf,
+				"Differential":  differential,
+				"Bet":           pointAssistBet,
 			})
 		}
 
-		//rebounds assists odds
-			//CombinationSum
-				//cdf
-
+		// Rebounds + Assists odds
 		for _, reboundAssistBet := range reboundsAssistsOdds {
-			value := int64(math.Ceil(reboundAssistBet["point"].(float64))) // Perform type assertion to convert to int64
-
+			value := float64(math.Ceil(reboundAssistBet["point"].(float64)))
 			combo := CombinationSum(rebounds, assists)
-
 			cdf := CDF(combo, value)
 
 			if reboundAssistBet["name"] == "Under" {
 				cdf = 1 - cdf
 			}
 
-			odds := 1.0/reboundAssistBet["price"].(float64)
-
+			odds := 1.0 / reboundAssistBet["price"].(float64)
 			differential := cdf - odds
-
 			reboundAssistBet["type"] = "rebounds_assists"
 
-			results = append(results, ArbitrageResult{
-				ExpectedValue: reboundAssistBet["price"].(float64),
-				BookProb: odds,
-				ModelProb: cdf,
-				Differential: differential,
-				Bet: reboundAssistBet,
+			results = append(results, map[string]any{
+				"ExpectedValue": reboundAssistBet["price"].(float64),
+				"BookProb":      odds,
+				"ModelProb":     cdf,
+				"Differential":  differential,
+				"Bet":           reboundAssistBet,
 			})
 		}
 
-		//points rebounds assists odds
-			//CombinationSum
-				//CombinationSum
-					//cdf
-
+		// Points + Rebounds + Assists odds
 		for _, pointReboundAssistBet := range pointsReboundsAssistsOdds {
-			value := int64(math.Ceil(pointReboundAssistBet["point"].(float64))) // Perform type assertion to convert to int64
+			value := float64(math.Ceil(pointReboundAssistBet["point"].(float64)))
 			combo := CombinationSum(points, rebounds)
 			combo = CombinationSum(combo, assists)
 
@@ -376,103 +297,76 @@ func Arbitrage(statspath string, oddspath string) []ArbitrageResult {
 				cdf = 1 - cdf
 			}
 
-			odds := 1.0/pointReboundAssistBet["price"].(float64)
-
+			odds := 1.0 / pointReboundAssistBet["price"].(float64)
 			differential := cdf - odds
-
 			pointReboundAssistBet["type"] = "points_rebounds_assists"
 
-			results = append(results, ArbitrageResult{
-				ExpectedValue: pointReboundAssistBet["price"].(float64),
-				BookProb: odds,
-				ModelProb: cdf,
-				Differential: differential,
-				Bet: pointReboundAssistBet,
+			results = append(results, map[string]any{
+				"ExpectedValue": pointReboundAssistBet["price"].(float64),
+				"BookProb":      odds,
+				"ModelProb":     cdf,
+				"Differential":  differential,
+				"Bet":           pointReboundAssistBet,
 			})
-
 		}
-
 	}
 
+	fmt.Println(results)
 
+	err := SaveResultsToFile(results, oddspath, "arbitrage.json")
+	if err != nil {
+			fmt.Printf("Error saving file: %v\n", err)
+	} else {
+			fmt.Println("File saved successfully.")
+	}
 	
-	
-
-	// for player odds
-		// get odds value and probability
-		// get CDF of value for player
-		// calculate differential 
-		// return expected value and differential
-
-	// for team odds
-		// get odds value and probability
-		// for totals
-			// do combinationsum Under all player stats for that total to get team distribution
-			// get CDF of value for team
-			// calculate differential
-			// return expected value and differential
-		// for spreads
-			// do combinationsum Under all player stats for that spread to get points distribution of both teams
-			// calculate differentials between total points of both teams
-			// get cdf of value for team differentials
-			// calculate differential
-			// return expected value and differential
-		// for h2h
-				// do combinationsum Under all player stats for that spread to get points distribution of both teams
-				// calculate differentials between total points of both teams
-				// get cdf of value for team differentials
-				// calculate differential
-				// return expected value and differential
-
-		SaveToFile(results, oddspath, "arbitrage.json")
-
-		return results
+	return results
 }
 
 func SearchPlayerOdds(m []map[string]any, val string) []map[string]any {
-	odds := make([]map[string]any, 0) // Specify the length and capacity of the slice
+	odds := make([]map[string]any, 0)
 	for _, v := range m {
 		if v["description"] == val {
-			odds = append(odds, v)
+			odds = append(odds, v) 
 		}
 	}
 	return odds
 }
 
-func IntSum(x []int64) int64 {
-	var sum int64
+// Sums a slice of float64
+func FloatSum(x []float64) float64 {
+	var sum float64
 	for _, v := range x {
 		sum += v
 	}
 	return sum
 }
 
-func CombinationSum(x []int64, y []int64) []int64 {
-
-	// sort x and y, split into groups of 10, take average
+// CombinationSum approximates distribution combinations by sampling averages in chunks
+func CombinationSum(x []float64, y []float64) []float64 {
 	slices.Sort(x)
 	slices.Sort(y)
 
-	var xaug []int64
-	var yaug []int64
+	var xaug []float64
+	var yaug []float64
 
 	for i := 0; i < len(x); i += 5000 {
-    end := i + 5000
-    if end > len(x) {
-        end = len(x) // Ensure you don't exceed the slice length
-    }
-    xaug = append(xaug, IntSum(x[i:end])/int64(end-i)) // Use actual length of the slice for averaging
+		end := i + 5000
+		if end > len(x) {
+			end = len(x)
+		}
+		xaug = append(xaug, FloatSum(x[i:end])/float64(end-i))
 	}
 
 	for i := 0; i < len(y); i += 5000 {
-			end := i + 5000
-			if end > len(y) {
-					end = len(y) // Ensure you don't exceed the slice length
-			}
-			yaug = append(yaug, IntSum(y[i:end])/int64(end-i)) // Use actual length of the slice for averaging
+		end := i + 5000
+		if end > len(y) {
+			end = len(y)
+		}
+		yaug = append(yaug, FloatSum(y[i:end])/float64(end-i))
 	}
 
-	var z []int64
+	var z []float64
 	for i := 0; i < len(xaug); i++ {
 		for j := 0; j < len(yaug); j++ {
 			z = append(z, xaug[i]+yaug[j])
@@ -481,90 +375,79 @@ func CombinationSum(x []int64, y []int64) []int64 {
 	return z
 }
 
-func Cartesian2(x []int64, y []int64) [][]int64 {
-	var z [][]int64
+func Cartesian2(x []float64, y []float64) [][]float64 {
+	var z [][]float64
 	for i := 0; i < len(x); i++ {
 		for j := 0; j < len(y); j++ {
-			z = append(z, []int64{x[i], y[j]})
+			z = append(z, []float64{x[i], y[j]})
 		}
 	}
 	return z
 }
 
-func Cartesian3(x []int64, y []int64, z []int64) [][]int64 {
-	var w [][]int64
+func Cartesian3(x []float64, y []float64, w []float64) [][]float64 {
+	var res [][]float64
 	for i := 0; i < len(x); i++ {
 		for j := 0; j < len(y); j++ {
-			for k := 0; k < len(z); k++ {
-				w = append(w, []int64{x[i], y[j], z[k]})
+			for k := 0; k < len(w); k++ {
+				res = append(res, []float64{x[i], y[j], w[k]})
 			}
 		}
 	}
-	return w
+	return res
 }
 
-func CDF(x []int64, val int64) float64 {
+func CDF(x []float64, val float64) float64 {
 	slices.Sort(x)
-
 	count := 0
-
 	for _, v := range x {
 		if v <= val {
 			count++
 		}
 	}
-
 	return float64(count) / float64(len(x))
 }
 
-func CDF2(x []int64, y []int64, val []int64) float64 {
+func CDF2(x []float64, y []float64, val []float64) float64 {
 	if len(val) != 2 {
-			panic("val must have 2 elements for CDF2")
+		panic("val must have 2 elements for CDF2")
 	}
 	cartesian := Cartesian2(x, y)
 	count := 0
-
 	for _, pair := range cartesian {
-			if pair[0] <= val[0] && pair[1] <= val[1] {
-					count++
-			}
+		if pair[0] <= val[0] && pair[1] <= val[1] {
+			count++
+		}
 	}
-
 	return float64(count) / float64(len(cartesian))
 }
 
-func CDF3(x []int64, y []int64, z []int64, val []int64) float64 {
+func CDF3(x []float64, y []float64, z []float64, val []float64) float64 {
 	if len(val) != 3 {
-			panic("val must have 3 elements for CDF3")
+		panic("val must have 3 elements for CDF3")
 	}
 	cartesian := Cartesian3(x, y, z)
 	count := 0
-
 	for _, triple := range cartesian {
-			if triple[0] <= val[0] && triple[1] <= val[1] && triple[2] <= val[2] {
-					count++
-			}
+		if triple[0] <= val[0] && triple[1] <= val[1] && triple[2] <= val[2] {
+			count++
+		}
 	}
-
 	return float64(count) / float64(len(cartesian))
 }
 
-// RenameDirsInDir renames all directories in a directory tree by replacing spaces with underscores
+// RenameDirsInDir renames directories
 func RenameDirsInDir(dir string) error {
-	// Read all entries in the directory
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return fmt.Errorf("failed to read directory: %w", err)
 	}
 
-	// Iterate Under all entries in the directory
 	for _, entry := range entries {
 		oldName := entry.Name()
 		oldPath := filepath.Join(dir, oldName)
 
-		// Process directories (skip files)
 		if entry.IsDir() {
-			// Rename the directory if it contains spaces
 			if strings.Contains(oldName, " ") {
 				newName := strings.ReplaceAll(oldName, " ", "_")
 				newPath := filepath.Join(dir, newName)
@@ -573,71 +456,70 @@ func RenameDirsInDir(dir string) error {
 					return fmt.Errorf("failed to rename directory %s to %s: %w", oldName, newName, err)
 				}
 				fmt.Printf("Renamed directory: %s -> %s\n", oldName, newName)
-				oldPath = newPath // Update path to renamed directory
+				oldPath = newPath
 			}
 
-			// Recursively rename subdirectories
 			err := RenameDirsInDir(oldPath)
 			if err != nil {
 				return err
 			}
 		}
 	}
-
 	return nil
 }
-// ReadOdds reads and combines JSON files from all directories and subdirectories into a single map
+
 func ReadOdds(dir string) map[string]interface{} {
-	// First, rename all directories
+	// Rename directories
 	err := RenameDirsInDir(dir)
 	if err != nil {
 		panic(fmt.Errorf("failed to rename directories: %w", err))
 	}
 
-	// Initialize the map to hold combined parsed data
+	// Prepare map to hold data
 	data := make(map[string]interface{})
 
-	// Walk through the directory and all its subdirectories
+	// Walk through the directory and process `odds.json` files
 	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return err
+			return fmt.Errorf("error accessing path %s: %w", path, err)
 		}
 
-		// Process only JSON files
-		if filepath.Ext(info.Name()) == ".json" {
+		// Ensure it's a file and has the correct extension
+		if !info.IsDir() && filepath.Ext(info.Name()) == ".json" && info.Name() == "odds.json" {
 			fmt.Println("Reading JSON file:", path)
 
-			// Read the JSON file
-			fileData, err := os.ReadFile(path) // Reads the entire file into memory
+			// Read file content
+			fileData, err := os.ReadFile(path)
 			if err != nil {
 				return fmt.Errorf("failed to read file %s: %w", path, err)
 			}
 
-			// Parse the JSON file content
+			// Unmarshal JSON content
 			var fileContent interface{}
 			err = json.Unmarshal(fileData, &fileContent)
 			if err != nil {
 				return fmt.Errorf("failed to unmarshal JSON from file %s: %w", path, err)
 			}
 
-			// Accumulate parsed data in the map under the filename as the key
+			// Store data with file path as key
 			data[path] = fileContent
 		}
+
 		return nil
 	})
 
 	if err != nil {
-		panic(fmt.Errorf("failed to walk the directory: %w", err))
+		panic(fmt.Errorf("failed to process directory: %w", err))
 	}
+
+	// Print the collected data for debugging
+	fmt.Println("Collected Data:", data)
 
 	return data
 }
-// ReadPreds reads and parses CSV files from a directory and returns a map of player data
-func ReadPreds(dir string) map[string]map[string][]int64 {
-	// Initialize the map to hold parsed data with player names as keys
-	data := make(map[string]map[string][]int64)
 
-	// Read all files in the directory
+func ReadPreds(dir string) map[string]map[string][]float64 {
+	data := make(map[string]map[string][]float64)
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		panic(fmt.Errorf("failed to read directory: %w", err))
@@ -645,59 +527,107 @@ func ReadPreds(dir string) map[string]map[string][]int64 {
 
 	for _, file := range files {
 		name := file.Name()
-
-		// Match files with the expected naming pattern
-		if !strings.HasPrefix(name, "team_stats_") || !strings.HasSuffix(name, "_posterior_predictive.csv") {
-			continue
-		}
-
-		// Extract the player name
-		player := strings.TrimSuffix(strings.TrimPrefix(name, "team_stats_"), "_posterior_predictive.csv")
-
-		// Build the file path
+		player := strings.TrimSuffix(name, "_preds.json")
 		path := filepath.Join(dir, name)
 
-		// Open the file
+		fmt.Println("Reading JSON file:", path)
+
 		f, err := os.Open(path)
 		if err != nil {
 			panic(fmt.Errorf("failed to open file %s: %w", path, err))
 		}
+		defer f.Close()
 
-		// Use defer in a separate function to ensure proper file closure
-		func(file *os.File) {
-			defer file.Close()
+		jsonData := make(map[string]interface{})
+		err = json.NewDecoder(f).Decode(&jsonData)
 
-			// Create a CSV reader and read all records
-			reader := csv.NewReader(file)
-			records, err := reader.ReadAll()
-			if err != nil {
-				panic(fmt.Errorf("failed to read CSV data from file %s: %w", path, err))
+		
+		if len(jsonData) > 0 && err == nil {
+
+			var key string
+			for k := range jsonData {
+				key = k
+				break
+			}
+			playerPredsIface, ok := jsonData[key].([]interface{})
+			if !ok {
+				panic(fmt.Errorf("unexpected structure for player predictions"))
 			}
 
-			// Read the header (first row)
-			headers := records[0]
 
-			// Initialize the player's data map with headers as keys
-			playerData := make(map[string][]int64)
+			if len(playerPredsIface) < 6 {
+				panic(fmt.Errorf("not enough prediction arrays for player %s", player))
+			}
 
-			// Parse CSV data into playerData map
-			for i, record := range records[1:] {
-				for j, value := range record {
-					val, err := strconv.ParseInt(value, 10, 64)
-					if err != nil {
-						panic(fmt.Errorf("invalid integer value in file %s at row %d, column %d: %w", path, i+2, j+1, err)) // i+2 because of header row
+			points := toFloat64Slice(playerPredsIface[0].([]interface{}))
+			assists := toFloat64Slice(playerPredsIface[1].([]interface{}))
+			totReb := toFloat64Slice(playerPredsIface[2].([]interface{}))
+			blocks := toFloat64Slice(playerPredsIface[3].([]interface{}))
+			steals := toFloat64Slice(playerPredsIface[4].([]interface{}))
+			turnovers := toFloat64Slice(playerPredsIface[5].([]interface{}))
+
+			data[player] = map[string][]float64{
+				"points":    points,
+				"assists":   assists,
+				"totReb":    totReb,
+				"blocks":    blocks,
+				"steals":    steals,
+				"turnovers": turnovers,
+			}
+		}
+	}
+	return data
+}
+
+func toFloat64Slice(arr []interface{}) []float64 {
+	out := make([]float64, len(arr))
+	for i, v := range arr {
+		f, ok := v.(float64)
+		if !ok {
+			panic(fmt.Errorf("expected a float64, got %T: %v", v, v))
+		}
+		out[i] = f
+	}
+	return out
+}
+
+
+
+// sanitizeResults replaces any NaN or Inf values with 0.0
+func sanitizeResults(results []map[string]any) []map[string]any {
+	for _, r := range results {
+			for k, v := range r {
+					if f, ok := v.(float64); ok {
+							if math.IsNaN(f) || math.IsInf(f, 0) {
+									r[k] = 0.0
+							}
 					}
-					// Use header as key and store the values
-					playerData[headers[j]] = append(playerData[headers[j]], val)
-				}
+					// If the value is nested map/array that might contain floats,
+					// you'd need to recursively sanitize those as well.
 			}
+	}
+	return results
+}
 
-			// change _ to space in player name
-			player = strings.ReplaceAll(player, "_", " ")
-			// Store the parsed player data in the map
-			data[player] = playerData
-		}(f)
+func SaveResultsToFile(results []map[string]any, dir string, filename string) error {
+	// Ensure directory exists
+	if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("failed to create directories for %s: %w", dir, err)
 	}
 
-	return data
+	// Sanitize results to remove NaNs
+	results = sanitizeResults(results)
+
+	outputPath := filepath.Join(dir, filename)
+	jsonData, err := json.MarshalIndent(results, "", "  ")
+	if err != nil {
+			return fmt.Errorf("failed to marshal results: %w", err)
+	}
+
+	if err := os.WriteFile(outputPath, jsonData, 0644); err != nil {
+			return fmt.Errorf("failed to write results to file %s: %w", outputPath, err)
+	}
+
+	fmt.Printf("Results successfully written to %s\n", outputPath)
+	return nil
 }
