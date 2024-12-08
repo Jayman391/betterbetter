@@ -6,7 +6,7 @@ import (
 
 	"gonum.org/v1/gonum/mat"
 	"gonum.org/v1/gonum/stat/distuv"
-	//"fmt"
+	"fmt"
 )
 
 // Distribution interface
@@ -139,7 +139,7 @@ func UVUniformLogLikelihood(min float64, max float64, n float64) float64 {
 	return -n * math.Log(max-min)
 }
 
-func (p *Posterior) CalcPosterior() []PosteriorResult {
+func (p *Posterior) CalcPosterior(chains int) []PosteriorResult {
 	// Create the grid
 	p.MarkovChain.CreateGrid()
 
@@ -212,21 +212,11 @@ func (p *Posterior) CalcPosterior() []PosteriorResult {
 			LogLikelihood: likelihoods[i],
 		}
 	}
+	//fmt.Println(results)
 	return results
 }
 
-func linkFunc(point []float64, data []float64) []float64 {
-	lambda := 0.0
-	//fmt.Println(point)
-	//fmt.Println(data)
-	for i, val := range data {
-		lambda += val * point[i]
-	}
-	lambda += point[len(point)-1]
-	return []float64{lambda , math.Sqrt(lambda)}
-}
-
-func (p *Posterior) CalcPosteriorPredictive(results []PosteriorResult, data []float64, numsamples int) []float64 {
+func (p *Posterior) CalcPosteriorPredictive(results []PosteriorResult, data [][]float64, numsamples int, linkfunc func([]float64, []float64) []float64) []float64 {
 	//weights correspond to likelihoods
 	// for num samples, weighted randomly select a result based on likelihood
 	// for each result, sample a data point from the likelihood distribution using the result's parameters as priors
@@ -253,7 +243,21 @@ func (p *Posterior) CalcPosteriorPredictive(results []PosteriorResult, data []fl
 
 	//these params are from Markov Chain Grid, must be transformed to rate variable
 	maxLLParams := results[maxLLIndex].Params
-	maxLLParams = linkFunc(maxLLParams, data)
+	tempparams := make([]float64, len(maxLLParams))
+
+	//fmt.Println(data)
+
+	for _, d := range data {
+
+
+		linkedParams := linkfunc(maxLLParams, d)
+
+		for i, j := range linkedParams {
+			tempparams[i] += (j / float64(len(data)))
+		}
+	}
+	maxLLParams = tempparams
+	
 
 	maxLLDistParams := p.LikelihoodParams.Params
 	
@@ -265,7 +269,7 @@ func (p *Posterior) CalcPosteriorPredictive(results []PosteriorResult, data []fl
 
 	MaxLLDist := p.LikelihoodParams.CreateDist() 
 
-	//fmt.Println(maxLLDistParams)
+	fmt.Println(maxLLDistParams)
 
 	posteriorSamples := SampleDist(MaxLLDist, numsamples)
 

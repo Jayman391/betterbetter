@@ -12,7 +12,7 @@ build regression model and forecast probability distributions of metrics for eac
 compare predicted probabilities to odds probabilities
 
 '''
-betterbetter model
+betterbetter bayes 
 '''
 
 calculate differentials between predicted and actual
@@ -31,7 +31,7 @@ run optimization routine to maximize expected value given risk/reward constraint
   make (multiple) sets of bets that satisfy the constraints
 
 '''
-betterbetter makebets -r
+betterbetter makebets -r -m
 '''
 
 

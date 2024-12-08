@@ -28,6 +28,9 @@ var betCMD = &cobra.Command{
 		if err != nil {
 			panic(err)
 		}
-		src.MakeBets(rr, maxbets)
+		bets := src.MakeBets(rr, maxbets)
+
+		//save bets to file
+		src.SaveToFile(bets,"data","bets.json")
 	},
 }

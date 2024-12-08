@@ -28,23 +28,23 @@ func MakeBets(rr float64, maxbets int) []map[string]interface{} {
 	// Initialize a slice to store Bet structs
 	var betsList []Bet
 
+	fmt.Println(arbs)
+
 	// For each date in arbs
 	for _, arb := range arbs {
 		arblist := arb.([]map[string]interface{})
 		var betCombos [][]int
 		// Get number of bets
 		numBets := len(arblist)
-
+		fmt.Println(numBets)
 		// Generate combinations of bets (1, 2, or 3 bets at a time)
 		for i := 0; i < numBets; i++ {
 			betCombos = append(betCombos, []int{i})
 			for j := i + 1; j < numBets; j++ {
 				betCombos = append(betCombos, []int{i, j})
-				for k := j + 1; k < numBets; k++ {
-					betCombos = append(betCombos, []int{i, j, k})
-				}
 			}
 		}
+		fmt.Println(betCombos)
 
 		// Iterate through each combination and calculate profits
 	outerLoop:
